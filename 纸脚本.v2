@@ -26,9 +26,10 @@ game:GetService("StarterGui"):SetCore("SendNotification", {
 })
 
 -- Tab 1: 作者信息
-local AuthorTab = Window:CreateTab("作者信息", 4483362458)
-AuthorTab:CreateParagraph({Title = "作者信息", Content = "脚本作者：纸飞机yut\nB站主页：https://b23.tv/oROqXeB\n感谢使用！"})
-AuthorTab:CreateButton({Name = "复制 B站主页链接", Callback = function() setclipboard("https://b23.tv/oROqXeB") Rayfield:Notify({Title = "已复制", Content = "链接已复制到剪贴板！", Duration = 5}) end})
+local AuthorTab = Window:CreateTab("公告", 4483362458)
+AuthorTab:CreateParagraph({Title = "信息", Content = "脚本作者：纸飞机yutB站主页：https://b23.tv/oROqXeB\n"})
+AuthorTab:CreateButton({Name = "复制B站主页链接", Callback = function() setclipboard("https://b23.tv/oROqXeB") Rayfield:Notify({Title = "已复制", Content = "链接已复制到剪贴板", Duration = 5}) end}
+AuthorTab:CreateParagraph({Title = "信息", Content = "此脚本已不会再更新，请使用V2"})
 
 -- Tab 2: 通用脚本加载
 local UniversalTab = Window:CreateTab("通用", 4483362458)
@@ -710,3 +711,723 @@ for i = 1, 16 do
 end 
 Rayfield:Notify({Title = "所有人变菜鸟", Content = "已加载！", Duration = 5}) end})
 
+-- Tab 8: 建船寻宝区域
+local BuildBoatTab = Window:CreateTab("建船寻宝", 4483362458)
+BuildBoatTab:CreateParagraph({Title = "功能", Content = "• 刷钱"})
+local moneyFarmEnabled = false
+local noclipConn = nil
+local antiFallBV = nil
+local floppaLoop = nil
+local pathLoop = nil
+local positions = {Vector3.new(-40, 35, 1371), Vector3.new(-61, 33, 2140), Vector3.new(-76, 41, 2909), Vector3.new(-87, 42, 3678), Vector3.new(-41, 48, 4450), Vector3.new(-88, 54, 5220), Vector3.new(-63, 49, 5990), Vector3.new(-83, 63, 6759), Vector3.new(-64, 51, 7530), Vector3.new(-99, 49, 8298), Vector3.new(-120, 179, 9132), Vector3.new(-56, -359, 9496)}
+local function enableNoclip()
+    if noclipConn then noclipConn:Disconnect() end
+    noclipConn = game:GetService("RunService").Stepped:Connect(function()
+        if game.Players.LocalPlayer.Character then
+            for _, part in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
+            end
+        end
+    end)
+end
+local function disableNoclip()
+    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+end
+local function preventFalling(hrp)
+    if antiFallBV then antiFallBV:Destroy() end
+    antiFallBV = Instance.new("BodyVelocity")
+    antiFallBV.MaxForce = Vector3.new(0, math.huge, 0)
+    antiFallBV.Velocity = Vector3.new(0, 0, 0)
+    antiFallBV.Parent = hrp
+end
+local function allowFalling()
+    if antiFallBV then antiFallBV:Destroy() antiFallBV = nil end
+end
+local function startFloppaClicker()
+    if floppaLoop then return end
+    floppaLoop = task.spawn(function()
+        while moneyFarmEnabled do
+            if game.Players.LocalPlayer.Character then
+                pcall(function()
+                    local floppa = workspace:FindFirstChild("Floppa") or workspace:FindFirstChildWhichIsA("Model", true)
+                    if floppa then
+                        for _, detector in pairs(floppa:GetDescendants()) do
+                            if detector:IsA("ClickDetector") then fireclickdetector(detector) end
+                        end
+                    end
+                end)
+            end
+            task.wait(0.1)
+        end
+    end)
+end
+local function startPathLoop()
+    if pathLoop then return end
+    pathLoop = task.spawn(function()
+        while moneyFarmEnabled do
+            local char = game.Players.LocalPlayer.Character or game.Players.LocalPlayer.CharacterAdded:Wait()
+            local hrp = char:WaitForChild("HumanoidRootPart")
+            enableNoclip()
+            preventFalling(hrp)
+            for _, pos in ipairs(positions) do
+                if not moneyFarmEnabled then break end
+                game:GetService("TweenService"):Create(hrp, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {CFrame = CFrame.new(pos)}):Play()
+                task.wait(1.8)
+            end
+            task.wait(8)
+        end
+        disableNoclip()
+        allowFalling()
+    end)
+end
+local function startMoneyFarm()
+    moneyFarmEnabled = true
+    startFloppaClicker()
+    startPathLoop()
+end
+local function stopMoneyFarm()
+    moneyFarmEnabled = false
+    disableNoclip()
+    allowFalling()
+    local char = game.Players.LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then char.Humanoid.Health = 0 end
+end
+game.Players.LocalPlayer.CharacterAdded:Connect(function()
+    if moneyFarmEnabled then task.wait(1) startMoneyFarm() end
+end)
+BuildBoatTab:CreateToggle({Name = "开启刷钱脚本", CurrentValue = false, Flag = "MoneyFarmToggle", Callback = function(Value)
+    if Value then startMoneyFarm() Rayfield:Notify({Title = "建船寻宝", Content = "刷钱脚本已开启！重生后自动恢复", Duration = 5}) else stopMoneyFarm() Rayfield:Notify({Title = "建船寻宝", Content = "刷钱脚本已关闭，并已自动死亡", Duration = 5}) end
+end})
+BuildBoatTab:CreateButton({Name = "购买圣诞钩爪", Callback = function()
+    local args = {915766549, "Product"}
+    workspace:WaitForChild("PromptRobuxEvent"):InvokeServer(unpack(args))
+    Rayfield:Notify({Title = "建船寻宝", Content = "已尝试购买圣诞钩爪！", Duration = 5})
+end})
+
+-- Tab 9: 独家自瞄区域
+local AimbotTab = Window:CreateTab("子弹追踪", 4483362458)
+AimbotTab:CreateParagraph({
+    Title = "独家自瞄功能",
+    Content = "• Silent Aim + Aimbot\n• 队伍检测：默认关闭（全员瞄准），可手动开启只敌方\n• 点击按钮切换开启/关闭\n• 已修复关闭bug"
+})
+
+local aimbotEnabled = false
+local teamCheckEnabled = false  -- 默认关闭队伍检测（全员瞄准）
+local oldRaycast = nil
+local originalRaycast = nil
+
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local function GetLocalTeam()
+    if LocalPlayer.Team then return LocalPlayer.Team end
+    return nil
+end
+
+local function GetNearestEnemyHead()
+    local closestPlayer = nil
+    local closestDistance = math.huge
+    local myHeadPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") and LocalPlayer.Character.Head.Position
+    local localTeam = GetLocalTeam()
+
+    if not myHeadPos then return nil end
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local head = player.Character.Head
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                if teamCheckEnabled then
+                    if player.Team == localTeam or player.Team == nil then continue end
+                end
+                local distance = (myHeadPos - head.Position).Magnitude
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestPlayer = player
+                end
+            end
+        end
+    end
+
+    if closestPlayer then return closestPlayer.Character.Head end
+    return nil
+end
+
+local function enableAimbot()
+    if oldRaycast then return end
+    originalRaycast = getrawmetatable(game).__namecall
+    setreadonly(getrawmetatable(game), false)
+    getrawmetatable(game).__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if not checkcaller() and method == "Raycast" and self == Workspace and aimbotEnabled then
+            local origin = args[1]
+            local direction = args[2]
+            local targetHead = GetNearestEnemyHead()
+            if targetHead then
+                local newDirection = (targetHead.Position - origin)
+                local distance = newDirection.Magnitude
+                local fakeResult = {
+                    Position = targetHead.Position,
+                    Distance = distance,
+                    Instance = targetHead,
+                    Normal = Vector3.new(0, 1, 0),
+                    Material = Enum.Material.Plastic,
+                }
+                return fakeResult
+            end
+        end
+        return originalRaycast(self, ...)
+    end)
+    setreadonly(getrawmetatable(game), true)
+    oldRaycast = true
+end
+
+local function disableAimbot()
+    if oldRaycast then
+        setreadonly(getrawmetatable(game), false)
+        getrawmetatable(game).__namecall = originalRaycast
+        setreadonly(getrawmetatable(game), true)
+        oldRaycast = nil
+        originalRaycast = nil
+    end
+end
+
+AimbotTab:CreateButton({
+    Name = "开启子弹追踪",
+    Callback = function()
+        aimbotEnabled = not aimbotEnabled
+        if aimbotEnabled then
+            enableAimbot()
+            Rayfield:Notify({Title = "独家自瞄", Content = "自瞄已开启！（当前全员瞄准）", Duration = 5})
+        else
+            disableAimbot()
+            Rayfield:Notify({Title = "独家自瞄", Content = "自瞄已关闭！已完全还原", Duration = 5})
+        end
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name = "开启队伍检测（只瞄敌方）",
+    CurrentValue = false,  -- 默认关闭（全员瞄准）
+    Flag = "TeamCheckToggle",
+    Callback = function(Value)
+        teamCheckEnabled = Value
+        Rayfield:Notify({Title = "队伍检测", Content = "队伍检测已" .. (Value and "开启（只瞄敌方）" or "关闭（全员）"), Duration = 5})
+    end
+})
+
+-- Tab: 99个夜晚区域
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
+local player = Players.LocalPlayer
+
+local Night99Tab = Window:CreateTab("99个夜晚", 4483362458)
+
+-- 锁血
+Night99Tab:CreateButton({
+    Name = "锁血",
+    Callback = function()
+        pcall(function()
+            ReplicatedStorage.RemoteEvents.DamagePlayer:FireServer(-inf)
+        end)
+    end
+})
+
+-- 通用收集函数
+local function collectItem(itemName)
+    local inventory = player:FindFirstChild("Inventory")
+    if not inventory then return end
+
+    local Remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+    local Store = Remotes:WaitForChild("RequestBagStoreItem")
+    local Drop = Remotes:WaitForChild("RequestBagDropItem")
+    local Items = workspace:WaitForChild("Items")
+
+    for _, item in ipairs(inventory:GetChildren()) do
+        for _, worldItem in ipairs(Items:GetChildren()) do
+            if worldItem.Name == itemName then
+                pcall(function()
+                    Store:InvokeServer(item, worldItem)
+                end)
+            end
+        end
+    end
+
+    task.wait(0.1)
+
+    local worldItem = Items:FindFirstChild(itemName)
+    if not worldItem then return end
+
+    for _, item in ipairs(inventory:GetChildren()) do
+        pcall(function()
+            Drop:FireServer(item, worldItem, true)
+        end)
+    end
+end
+
+-- 收集木头 / 煤炭 / 生兔肉 / 萝卜
+Night99Tab:CreateButton({Name = "收集木头", Callback = function() collectItem("Log") end})
+Night99Tab:CreateButton({Name = "收集煤炭", Callback = function() collectItem("Coal") end})
+Night99Tab:CreateButton({Name = "收集生兔肉", Callback = function() collectItem("Morsel") end})
+Night99Tab:CreateButton({Name = "收集萝卜", Callback = function() collectItem("Carrot") end})
+
+-- 透视 Toggle
+local espEnabled = false
+local espConnections = {}
+
+Night99Tab:CreateToggle({
+    Name = "透视所有生物",
+    CurrentValue = false,
+    Callback = function(Value)
+        espEnabled = Value
+        if espEnabled then
+            -- 给已有角色加 Highlight
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= player and plr.Character then
+                    if not plr.Character:FindFirstChild("ESP_HL") then
+                        local hl = Instance.new("Highlight")
+                        hl.Name = "ESP_HL"
+                        hl.FillTransparency = 0.5
+                        hl.OutlineTransparency = 0
+                        hl.Parent = plr.Character
+                    end
+                end
+            end
+
+            -- 玩家加入 / 角色生成监听
+            table.insert(espConnections, Players.PlayerAdded:Connect(function(plr)
+                plr.CharacterAdded:Connect(function(char)
+                    task.wait(1)
+                    if espEnabled then
+                        local hl = Instance.new("Highlight")
+                        hl.Name = "ESP_HL"
+                        hl.FillTransparency = 0.5
+                        hl.OutlineTransparency = 0
+                        hl.Parent = char
+                    end
+                end)
+            end))
+        else
+            -- 移除已有 Highlight
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr.Character then
+                    local hl = plr.Character:FindFirstChild("ESP_HL")
+                    if hl then hl:Destroy() end
+                end
+            end
+            -- 断开连接
+            for _, conn in ipairs(espConnections) do conn:Disconnect() end
+            espConnections = {}
+        end
+    end
+})
+
+-- 白天 Toggle
+local dayEnabled = false
+local defaultLighting = {
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    FogEnd = Lighting.FogEnd,
+    GlobalShadows = Lighting.GlobalShadows,
+    OutdoorAmbient = Lighting.OutdoorAmbient
+}
+
+local dayConnection
+Night99Tab:CreateToggle({
+    Name = "白天",
+    CurrentValue = false,
+    Callback = function(Value)
+        dayEnabled = Value
+        if dayEnabled then
+            -- 设置白天
+            Lighting.Brightness = 3
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = false
+            Lighting.OutdoorAmbient = Color3.fromRGB(128,128,128)
+
+            -- 防止 ClockTime 被游戏修改
+            if dayConnection then dayConnection:Disconnect() end
+            dayConnection = Lighting:GetPropertyChangedSignal("ClockTime"):Connect(function()
+                if dayEnabled then
+                    Lighting.ClockTime = 14
+                end
+            end)
+        else
+            -- 恢复默认环境
+            Lighting.Brightness = defaultLighting.Brightness
+            Lighting.ClockTime = defaultLighting.ClockTime
+            Lighting.FogEnd = defaultLighting.FogEnd
+            Lighting.GlobalShadows = defaultLighting.GlobalShadows
+            Lighting.OutdoorAmbient = defaultLighting.OutdoorAmbient
+
+            if dayConnection then dayConnection:Disconnect() dayConnection = nil end
+        end
+    end
+})
+
+-- ==== 被遗弃区域 最终整合修复版 ====
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+
+-- ==== 创建 Tab ====
+local AbandonedTab = Window:CreateTab("被遗弃", 4483362458)
+
+-- ==== 状态表 ====
+local abandonedState = {
+    infiniteStamina = false,
+    killerInfiniteStamina = false,
+    antiDizzy = false,
+    espKillers = false,
+    espSurvivors = false,
+    espItems = false,
+    espGenerators = false,
+    autoGenerator = false,
+    fixtime = 3
+}
+
+-- ==== 核心视觉处理函数 (适配杀手/物品/幸存者) ====
+local function setupModelEffects(model, color, labelText)
+    if not model:IsA("Model") then return end
+
+    -- 高光处理
+    local h = model:FindFirstChild("Highlight") or Instance.new("Highlight")
+    h.Name = "Highlight"
+    h.FillColor = color or Color3.fromRGB(255, 0, 0)
+    h.OutlineColor = Color3.fromRGB(255, 255, 255)
+    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    h.Parent = model
+
+    -- 标签处理
+    local b = model:FindFirstChild("NameLabel") or Instance.new("BillboardGui")
+    b.Name = "NameLabel"
+    b.Size = UDim2.new(0, 50, 0, 50)
+    b.StudsOffset = Vector3.new(0, 2, 0)
+    b.AlwaysOnTop = true
+
+    local tl = b:FindFirstChild("TextLabel") or Instance.new("TextLabel")
+    tl.Name = "TextLabel"
+    tl.Size = UDim2.new(1, 0, 1, 0)
+    tl.BackgroundTransparency = 1
+    tl.Text = labelText or model.Name
+    tl.Font = Enum.Font.SourceSansBold
+    tl.TextSize = 11
+    tl.TextColor3 = color or Color3.fromRGB(255, 255, 255)
+    tl.Parent = b
+    b.Parent = model
+end
+
+local function removeModelEffects(model)
+    if model:FindFirstChild("Highlight") then model.Highlight:Destroy() end
+    if model:FindFirstChild("NameLabel") then model.NameLabel:Destroy() end
+end
+
+-- ==== 体力模块逻辑 ====
+local sprintModule
+local function tryLoadSprint()
+    if sprintModule then return end
+    pcall(function() sprintModule = require(ReplicatedStorage.Systems.Character.Game.Sprinting) end)
+end
+
+local function setStamina()
+    tryLoadSprint()
+    if not sprintModule then return end
+    pcall(function()
+        sprintModule.StaminaLossDisabled = abandonedState.infiniteStamina
+        sprintModule.MinStamina = abandonedState.killerInfiniteStamina and -1e6 or 0
+    end)
+end
+task.spawn(function() while task.wait(0.5) do pcall(setStamina) end end)
+
+-- ==========================================
+--                核心功能开关
+-- ==========================================
+
+-- 1. 2. 3. 体力与反眩晕
+AbandonedTab:CreateToggle({Name = "无限体力", Callback = function(v) abandonedState.infiniteStamina = v; setStamina() end})
+AbandonedTab:CreateToggle({Name = "杀手无限体力", Callback = function(v) abandonedState.killerInfiniteStamina = v; setStamina() end})
+AbandonedTab:CreateToggle({
+    Name = "反眩晕/反减速",
+    Callback = function(v)
+        abandonedState.antiDizzy = v
+        if v then
+            task.spawn(function()
+                while abandonedState.antiDizzy do
+                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                        LocalPlayer.Character.Humanoid.WalkSpeed = 20
+                    end
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end
+})
+
+-- 4. ESP 杀手 (红色 - 使用你提供的逻辑)
+AbandonedTab:CreateToggle({
+    Name = "ESP 杀手",
+    Callback = function(state)
+        abandonedState.espKillers = state
+        if state then
+            task.spawn(function()
+                while abandonedState.espKillers do
+                    local killFolder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
+                    if killFolder then
+                        for _, child in ipairs(killFolder:GetChildren()) do
+                            if child:IsA("Model") then
+                                setupModelEffects(child, Color3.fromRGB(255, 0, 0), "杀手")
+                            end
+                        end
+                    end
+                    task.wait(2)
+                end
+            end)
+        else
+            local killFolder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
+            if killFolder then
+                for _, child in ipairs(killFolder:GetChildren()) do
+                    removeModelEffects(child)
+                end
+            end
+        end
+    end
+})
+
+-- 5. ESP 幸存者 (绿色)
+AbandonedTab:CreateToggle({
+    Name = "ESP 幸存者",
+    Callback = function(state)
+        abandonedState.espSurvivors = state
+        if state then
+            task.spawn(function()
+                while abandonedState.espSurvivors do
+                    local survFolder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+                    if survFolder then
+                        for _, child in ipairs(survFolder:GetChildren()) do
+                            if child:IsA("Model") and child.Name ~= LocalPlayer.Name then
+                                setupModelEffects(child, Color3.fromRGB(0, 255, 0), child.Name)
+                            end
+                        end
+                    end
+                    task.wait(2)
+                end
+            end)
+        else
+            local survFolder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+            if survFolder then
+                for _, child in ipairs(survFolder:GetChildren()) do
+                    removeModelEffects(child)
+                end
+            end
+        end
+    end
+})
+
+-- 6. ESP 物品 (白色文字 + 黄色高光 - 优化版)
+AbandonedTab:CreateToggle({
+    Name = "ESP 物品",
+    Callback = function(state)
+        abandonedState.espItems = state
+        if state then
+            task.spawn(function()
+                while abandonedState.espItems do
+                    local ingame = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame")
+                    if ingame then
+                        for _, instance in ipairs(ingame:GetDescendants()) do
+                            if instance:IsA("Tool") then
+                                setupModelEffects(instance, Color3.fromRGB(255, 255, 0), instance.Name)
+                                -- 强制将工具文字设为白色
+                                if instance:FindFirstChild("NameLabel") then
+                                    instance.NameLabel.TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                                end
+                            end
+                        end
+                    end
+                    task.wait(2)
+                end
+            end)
+        else
+            local ingame = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame")
+            if ingame then
+                for _, tool in ipairs(ingame:GetDescendants()) do
+                    if tool:IsA("Tool") then removeModelEffects(tool) end
+                end
+            end
+        end
+    end
+})
+
+-- 7. ESP 发电机 (蓝色实时进度)
+AbandonedTab:CreateToggle({
+    Name = "ESP 发电机",
+    Callback = function(state)
+        abandonedState.espGenerators = state
+        local genColor = Color3.fromRGB(0, 16, 176)
+        if state then
+            task.spawn(function()
+                while abandonedState.espGenerators do
+                    local mapFolder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map")
+                    if mapFolder then
+                        for _, v in ipairs(mapFolder:GetChildren()) do
+                            if v.Name == "Generator" and v:IsA("Model") then
+                                local progress = v:FindFirstChild("Progress") and v.Progress.Value or 0
+                                local label = (progress < 100) and ("电机(未完成) 进度.." .. progress) or "电机(完成)"
+                                setupModelEffects(v, genColor, label)
+                            end
+                        end
+                    end
+                    task.wait(0.5)
+                end
+            end)
+        else
+            local mapFolder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map")
+            if mapFolder then
+                for _, v in ipairs(mapFolder:GetChildren()) do removeModelEffects(v) end
+            end
+        end
+    end
+})
+
+-- 8. 自动发电机 (3秒一次)
+AbandonedTab:CreateToggle({
+    Name = "自动修发电机",
+    Callback = function(state)
+        abandonedState.autoGenerator = state
+        if state then
+            task.spawn(function()
+                while abandonedState.autoGenerator do
+                    task.wait(abandonedState.fixtime)
+                    local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    local mapFolder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map")
+                    if mapFolder and rootPart then
+                        local closestGenerator, closestDistance = nil, math.huge
+                        for _, g in ipairs(mapFolder:GetChildren()) do
+                            if g.Name == "Generator" and g:FindFirstChild("Progress") and g.Progress.Value < 100 then
+                                local main = g:FindFirstChild("Main") or g:FindFirstChild("PrimaryPart")
+                                if main then
+                                    local dist = (main.Position - rootPart.Position).Magnitude
+                                    if dist < closestDistance then
+                                        closestDistance = dist
+                                        closestGenerator = g
+                                    end
+                                end
+                            end
+                        end
+                        if closestGenerator then pcall(function() closestGenerator.Remotes.RE:FireServer() end) end
+                    end
+                end
+            end)
+        end
+    end
+})
+
+
+--==============================
+-- 战争大亨区域
+--==============================
+local WarTab = Window:CreateTab("战争大亨", 4483362458)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+--==============================
+-- 传送回家（第一次会自杀，之后不会）
+--==============================
+local homeCFrame = nil
+local hasDiedOnce = false
+
+local function recordHome(character)
+    local hrp = character:WaitForChild("HumanoidRootPart")
+    if not homeCFrame then
+        homeCFrame = hrp.CFrame
+        Rayfield:Notify({
+            Title = "已记录回家点",
+            Content = "这是你的重生点",
+            Duration = 4
+        })
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(recordHome)
+if LocalPlayer.Character then
+    recordHome(LocalPlayer.Character)
+end
+
+WarTab:CreateButton({
+    Name = "传送回家(会自杀)",
+    Callback = function()
+        local char = LocalPlayer.Character
+        if not char or not char:FindFirstChild("Humanoid") then return end
+
+        if not hasDiedOnce then
+            hasDiedOnce = true
+            char.Humanoid.Health = 0 -- 第一次自杀
+            Rayfield:Notify({
+                Title = "回家中",
+                Content = "第一次需要自杀记录回家点",
+                Duration = 4
+            })
+        else
+            if homeCFrame and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.CFrame = homeCFrame + Vector3.new(0,5,0)
+            end
+        end
+    end
+})
+
+--==============================
+-- 传送到站点（不会自杀）
+--==============================
+WarTab:CreateButton({
+    Name = "传送到站点",
+    Callback = function()
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.CFrame =
+                CFrame.new(-509.92, 177.04, -1022.77)
+        end
+    end
+})
+
+--==============================
+-- 全枪无限子弹 + 无限射程
+--（ACS 枪械系统）
+--==============================
+WarTab:CreateButton({
+    Name = "全枪无限子弹 + 无限射程",
+    Callback = function()
+        local GunsFolder =
+            ReplicatedStorage:WaitForChild("Configurations")
+            :WaitForChild("ACS_Guns")
+
+        for _, gun in pairs(GunsFolder:GetChildren()) do
+            if gun:FindFirstChild("Settings") then
+                local ok, settings = pcall(function()
+                    return require(gun.Settings)
+                end)
+
+                if ok and type(settings) == "table" then
+                    -- 无限子弹
+                    settings.Ammo = 2
+                    settings.Bullets = 6
+
+                    -- 无限射程
+                    settings.Range = 9e9
+                    settings.MaxDistance = 9e9
+                end
+            end
+        end
+
+        Rayfield:Notify({
+            Title = "武器已强化",
+            Content = "所有枪械：无限子弹 + 无限射程",
+            Duration = 4
+        })
+    end
+})
