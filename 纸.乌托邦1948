@@ -1,0 +1,202 @@
+--[[by
+█████████
+           ██ 
+         ██   
+       ██     
+     ██       
+   ██         
+ ██           
+█████████   
+
+██          ██
+██          ██
+██          ██
+██████████
+██          ██
+██          ██
+██          ██
+██          ██
+
+███████████
+       ██      
+       ██      
+       ██      
+       ██      
+       ██      
+       ██      
+███████████
+
+]]
+--bt zhi fei ji yut
+--you fon linging～you fon linging～
+
+local fenv = getfenv()
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+-- ==========================================
+-- 核心功能：无限体力 (利用 getgc 遍历清空消耗)
+-- ==========================================
+for _, v in pairs(getgc(true)) do
+    if type(v) == "table" and rawget(v, "MaxStamina") and rawget(v, "DrainRate") then
+        v.DrainRate = 0  
+        if v.Costs and v.Costs.Jump then
+            v.Costs.Jump = 0 
+        end
+        v.ExhaustionTime = 0 
+    end
+end
+
+-- 动态引用在线 zhiUI 库
+local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
+
+-- ==========================================
+-- 远程事件接口与基础配置
+-- ==========================================
+local JobSystem = ReplicatedStorage:WaitForChild('JobSystem')
+local StartCraftingJob = JobSystem:WaitForChild('StartCraftingJob')
+local JobAction = JobSystem:WaitForChild('JobAction')
+local BuyRemote = ReplicatedStorage:WaitForChild('MenuShopRemotes'):WaitForChild('Buy')
+local ConsumableUsed = ReplicatedStorage:WaitForChild('ConsumableUsed')
+local PunchEvent = ReplicatedStorage:WaitForChild("PunchEvent")
+
+-- ==========================================
+-- 创建主窗口
+-- ==========================================
+local Window = zhiUI:CreateWindow({Title = "纸:乌托邦1984"})
+
+local CombatTab = Window:AddTab("战斗特战")
+local TPTab = Window:AddTab("位置传送")
+local ShopTab = Window:AddTab("快速商店")
+local SettingTab = Window:AddTab("辅助设置")
+
+-- ==========================================
+-- 战斗特战 Tab 配置 (高频拳击攻击光环)
+-- ==========================================
+local punchAuraRunning = false
+local punchCooldown = 0.1 
+
+CombatTab:AddToggle('开启攻击光环', false, function(state)
+    punchAuraRunning = state
+    if state then
+        zhiUI:Notify("攻击光环", "拳击自动攻击已开启", 2)
+    else
+        zhiUI:Notify("攻击光环", "已关闭", 2)
+    end
+end)
+
+CombatTab:AddSlider('攻击间隔速度 (0.1秒起)', 1, 10, 1, function(val)
+    punchCooldown = val * 0.1
+end)
+
+-- 攻击光环高频帧循环逻辑
+local lastPunchTime = 0
+RunService.Heartbeat:Connect(function()
+    if punchAuraRunning then
+        local currentTime = os.clock()
+        if currentTime - lastPunchTime >= punchCooldown then
+            lastPunchTime = currentTime
+            PunchEvent:FireServer()
+        end
+    end
+end)
+
+-- ==========================================
+-- 位置传送 Tab 配置
+-- ==========================================
+local locations = {
+    {name = "工厂 (Factory)", cframe = CFrame.new(476.9, 9, 325.3)},
+    {name = "商店 (Shop)", cframe = CFrame.new(409.8, 9, 226.4)},
+    {name = "黑市 (Black Market)", cframe = CFrame.new(540.6, 9, 204)},
+    {name = "配给中心 (Rations Center)", cframe = CFrame.new(333.2, 9, 305.7)},
+    {name = "杂货铺 (General Store)", cframe = CFrame.new(332, 9, 21)},
+    {name = "警察总部 (Police HQ)", cframe = CFrame.new(336.3, 9, -31.6)},
+    {name = "银行 (Bank)", cframe = CFrame.new(540.5, 9, -85.4)},
+    {name = "医疗中心 (Medical Center)", cframe = CFrame.new(542.1, 9, -39.3)},
+    {name = "理发店 (Barbershop)", cframe = CFrame.new(542.5, 9.1, 68.2)},
+    {name = "枪店 (Gun Store)", cframe = CFrame.new(601.7, 9, -35.7)},
+    {name = "宫殿 (Palace)", cframe = CFrame.new(633.5, 9, 1)}
+}
+
+for _, loc in ipairs(locations) do
+    TPTab:AddButton(loc.name, function()
+        local hrp = localPlayer.Character and localPlayer.Character:FindFirstChild('HumanoidRootPart')
+        if hrp then
+            hrp.CFrame = loc.cframe
+            zhiUI:Notify("传送成功！", "已到达 " .. loc.name, 2)
+        end
+    end)
+end
+
+-- ==========================================
+-- 快速商店 Tab 配置
+-- ==========================================
+local shopItems = {
+    {text = "购买 污水 ($6)", item = "Dirty Water"},
+    {text = "购买 纯净水 ($13)", item = "Water"},
+    {text = "购买 高级水 ($26)", item = "Premium Water"},
+    {text = "购买 豆子罐头 ($13)", item = "Beans"},
+    {text = "购买 面包 ($13)", item = "Bread"},
+    {text = "购买 鹅肝 ($39)", item = "Foie Gras"}
+}
+
+for _, shopItem in ipairs(shopItems) do
+    ShopTab:AddButton(shopItem.text, function()
+        BuyRemote:FireServer(shopItem.item)
+        zhiUI:Notify("商店", "正在购买 " .. shopItem.item .. "...", 2)
+    end)
+end
+
+local manualActions = {
+    {text = "开始工作 (碳钢)", func = function() StartCraftingJob:FireServer('Carbon Steel') end},
+    {text = "步骤：熔炼 (Smelt)", func = function() JobAction:FireServer('Smelt') end},
+    {text = "步骤：锻打 (Hammer)", func = function() JobAction:FireServer('Hammer') end},
+    {text = "步骤：淬火 (Quench)", func = function() JobAction:FireServer('Quench') end},
+    {text = "步骤：制作 (Craft)", func = function() JobAction:FireServer('Craft') end}
+}
+
+for _, btnAct in ipairs(manualActions) do
+    ShopTab:AddButton(btnAct.text, btnAct.func)
+end
+
+ShopTab:AddButton('立即手动进食 (水 + 豆子)', function()
+    BuyRemote:FireServer('Water')
+    task.wait(0.3)
+    ConsumableUsed:FireServer(Instance.new('Tool', nil))
+    task.wait(0.3)
+    BuyRemote:FireServer('Beans')
+    task.wait(0.3)
+    ConsumableUsed:FireServer(Instance.new('Tool', nil))
+    zhiUI:Notify("进食完毕！", "已成功购买并消耗 水 与 豆子。", 2)
+end)
+
+-- ==========================================
+-- 辅助设置 Tab 配置
+-- ==========================================
+local antiAFKRunning = false
+SettingTab:AddToggle('防挂机踢出 (Anti AFK)', false, function(state)
+    antiAFKRunning = state
+    if state then
+        zhiUI:Notify("防挂机踢出", "长时间未操作防踢已激活", 3)
+    end
+end)
+
+-- 防挂机动作触发
+localPlayer.Idled:Connect(function()
+    if antiAFKRunning then
+        VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        task.wait(0.1)
+        VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+    end
+end)
+
+-- 载入通知
+zhiUI:Notify("纸:乌托邦1984", "融合脚本成功载入！无限体力与功能列表已就绪。", 4)
