@@ -1,5 +1,5 @@
 -- ==========================================================
--- Prison Life Custom Glassmorphism Hub (V10 - Fixed Tracers & Expanded Effects)
+-- Prison Life Custom Hub (灾厄掠夺·重构版 - zhiUI 驱动)
 -- ==========================================================
 
 local Players = game:GetService("Players")
@@ -15,7 +15,12 @@ local ShootEvent = GunRemotes:WaitForChild("ShootEvent")
 local ReloadRemote = GunRemotes:WaitForChild("FuncReload")
 local MeleeEvent = ReplicatedStorage:FindFirstChild("meleeEvent")
 
--- 全局设置
+-- 加载 zhiUI 界面框架
+local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
+
+-- ==========================================================
+-- 全局设置与变量配置
+-- ==========================================================
 local settings = {
     silentAim = false,
     wallCheck = true,
@@ -58,369 +63,107 @@ local isReloading = false
 local lastPos = nil
 local lastHitLog = {}
 
+-- 获取 Rainbow 动态颜色的辅助函数
+local function getRainbowColor()
+    local hue = (tick() % 3) / 3
+    return Color3.fromHSV(hue, 0.9, 1)
+end
+
 -- ==========================================================
--- 1. 构建毛玻璃风格 UI 界面
+-- 1. 构建 zhiUI 窗口与分页
 -- ==========================================================
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "CustomGlassHubV10"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+local Window = zhiUI:CreateWindow({Title = "纸.监狱人生"})
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 240, 0, 480)
-MainFrame.Position = UDim2.new(0.8, 0, 0.2, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
-MainFrame.BackgroundTransparency = 0.35
-MainFrame.ClipsDescendants = false
-MainFrame.Active = true
-MainFrame.Draggable = true
-MainFrame.Parent = ScreenGui
+local MainTab   = Window:AddTab("主控自瞄")
+local VisualTab = Window:AddTab("视觉渲染")
+local PlayerTab = Window:AddTab("玩家机动")
+local ItemTab   = Window:AddTab("物品获取")
+local SafetyTab = Window:AddTab("防护设置")
 
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 14)
+-- ==========================================================
+-- 2. 填充界面控件
+-- ==========================================================
 
-local MainStroke = Instance.new("UIStroke", MainFrame)
-MainStroke.Color = Color3.fromRGB(255, 255, 255)
-MainStroke.Transparency = 0.7
-MainStroke.Thickness = 1.2
-
--- 标题栏
-local Header = Instance.new("Frame", MainFrame)
-Header.Name = "Header"
-Header.Size = UDim2.new(1, 0, 0, 40)
-Header.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
-Header.BackgroundTransparency = 0.4
-Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 14)
-
-local TitleText = Instance.new("TextLabel", Header)
-TitleText.Size = UDim2.new(1, -50, 1, 0)
-TitleText.Position = UDim2.new(0, 15, 0, 0)
-TitleText.BackgroundTransparency = 1
-TitleText.Text = "PRISON LIFE • HUB"
-TitleText.TextColor3 = Color3.fromRGB(240, 240, 255)
-TitleText.Font = Enum.Font.GothamBold
-TitleText.TextSize = 13
-TitleText.TextXAlignment = Enum.TextXAlignment.Left
-
--- 折叠按钮
-local FoldBtn = Instance.new("TextButton", Header)
-FoldBtn.Size = UDim2.new(0, 26, 0, 26)
-FoldBtn.Position = UDim2.new(1, -33, 0.5, -13)
-FoldBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-FoldBtn.BackgroundTransparency = 0.85
-FoldBtn.Text = "−"
-FoldBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-FoldBtn.Font = Enum.Font.GothamBold
-FoldBtn.TextSize = 16
-Instance.new("UICorner", FoldBtn).CornerRadius = UDim.new(0, 6)
-
--- 滚动容器
-local ScrollContainer = Instance.new("ScrollingFrame", MainFrame)
-ScrollContainer.Name = "ScrollContainer"
-ScrollContainer.Size = UDim2.new(1, 0, 1, -40)
-ScrollContainer.Position = UDim2.new(0, 0, 0, 40)
-ScrollContainer.BackgroundTransparency = 1
-ScrollContainer.ScrollBarThickness = 2
-ScrollContainer.ScrollBarImageColor3 = Color3.fromRGB(0, 180, 255)
-ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, 980)
-
-local UIList = Instance.new("UIListLayout", ScrollContainer)
-UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-UIList.Padding = UDim.new(0, 6)
-
-local UIPadding = Instance.new("UIPadding", ScrollContainer)
-UIPadding.PaddingTop = UDim.new(0, 8)
-
-local isFolded = false
-FoldBtn.MouseButton1Click:Connect(function()
-    isFolded = not isFolded
-    FoldBtn.Text = isFolded and "+" or "−"
-    ScrollContainer.Visible = not isFolded
-    local targetSize = isFolded and UDim2.new(0, 240, 0, 40) or UDim2.new(0, 240, 0, 480)
-    TweenService:Create(MainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-        Size = targetSize
-    }):Play()
+-- --- [Tab 1: 主控自瞄] ---
+MainTab:AddToggle("静默自瞄 (Silent Aim)", false, function(state)
+    settings.silentAim = state
+    zhiUI:Notify("自瞄模式", state and "静默自瞄已开启" or "静默自瞄已关闭", 2)
 end)
 
--- ==========================================================
--- 2. UI 开关与扩展下拉框
--- ==========================================================
-local function createGlassToggle(text, settingKey)
-    local btn = Instance.new("TextButton", ScrollContainer)
-    btn.Size = UDim2.new(0.9, 0, 0, 32)
-    btn.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
-    btn.BackgroundTransparency = 0.5
-    btn.Text = ""
-    btn.AutoButtonColor = false
+MainTab:AddToggle("墙壁检测 (Wall Check)", true, function(state)
+    settings.wallCheck = state
+end)
 
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-    local stroke = Instance.new("UIStroke", btn)
-    stroke.Color = Color3.fromRGB(255, 255, 255)
-    stroke.Transparency = 0.85
+MainTab:AddToggle("自动换弹 (Auto Reload)", true, function(state)
+    settings.autoReload = state
+end)
 
-    local label = Instance.new("TextLabel", btn)
-    label.Size = UDim2.new(0.7, 0, 1, 0)
-    label.Position = UDim2.new(0, 10, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(200, 205, 220)
-    label.Font = Enum.Font.GothamMedium
-    label.TextSize = 12
-    label.TextXAlignment = Enum.TextXAlignment.Left
+MainTab:AddToggle("秒杀拳击 (Fast Punch)", false, function(state)
+    settings.fastPunch = state
+    zhiUI:Notify("拳击增强", state and "秒杀拳击已激活" or "已关闭秒杀拳击", 2)
+end)
 
-    local statusDot = Instance.new("Frame", btn)
-    statusDot.Size = UDim2.new(0, 10, 0, 10)
-    statusDot.Position = UDim2.new(1, -20, 0.5, -5)
-    statusDot.BackgroundColor3 = settings[settingKey] and Color3.fromRGB(0, 230, 130) or Color3.fromRGB(230, 60, 60)
-    Instance.new("UICorner", statusDot).CornerRadius = UDim.new(1, 0)
+MainTab:AddDropdown("保护囚犯 (Inmates)", {"关闭保护", "开启保护"}, function(selected)
+    ProtectedTeams["Inmates"] = (selected == "开启保护")
+end)
 
-    btn.MouseButton1Click:Connect(function()
-        settings[settingKey] = not settings[settingKey]
-        local active = settings[settingKey]
-        TweenService:Create(statusDot, TweenInfo.new(0.2), {
-            BackgroundColor3 = active and Color3.fromRGB(0, 230, 130) or Color3.fromRGB(230, 60, 60)
-        }):Play()
-        TweenService:Create(btn, TweenInfo.new(0.2), {
-            BackgroundTransparency = active and 0.25 or 0.5
-        }):Play()
-    end)
-end
+MainTab:AddDropdown("保护警卫 (Guards)", {"关闭保护", "开启保护"}, function(selected)
+    ProtectedTeams["Guards"] = (selected == "开启保护")
+end)
 
--- 颜色下拉框 (扩展 10 种颜色)
-local function createColorDropdown()
-    local container = Instance.new("Frame", ScrollContainer)
-    container.Size = UDim2.new(0.9, 0, 0, 32)
-    container.BackgroundColor3 = Color3.fromRGB(30, 35, 50)
-    container.BackgroundTransparency = 0.5
-    container.ClipsDescendants = true
-    container.ZIndex = 8
-    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
-    
-    local stroke = Instance.new("UIStroke", container)
-    stroke.Color = Color3.fromRGB(255, 255, 255)
-    stroke.Transparency = 0.85
+MainTab:AddDropdown("保护罪犯 (Criminals)", {"关闭保护", "开启保护"}, function(selected)
+    ProtectedTeams["Criminals"] = (selected == "开启保护")
+end)
 
-    local mainBtn = Instance.new("TextButton", container)
-    mainBtn.Size = UDim2.new(1, 0, 0, 32)
-    mainBtn.BackgroundTransparency = 1
-    mainBtn.Text = "轨道颜色: Blue ▾"
-    mainBtn.TextColor3 = Color3.fromRGB(200, 205, 220)
-    mainBtn.Font = Enum.Font.GothamMedium
-    mainBtn.TextSize = 12
-    mainBtn.ZIndex = 9
+-- --- [Tab 2: 视觉渲染] ---
+VisualTab:AddToggle("视觉激光 (Tracers)", false, function(state)
+    settings.visualTracers = state
+    zhiUI:Notify("弹道激光", state and "显示动态弹道轨迹" or "隐藏弹道轨迹", 2)
+end)
 
-    local itemsFrame = Instance.new("Frame", container)
-    itemsFrame.Size = UDim2.new(1, 0, 0, 240)
-    itemsFrame.Position = UDim2.new(0, 0, 0, 34)
-    itemsFrame.BackgroundTransparency = 1
-    itemsFrame.ZIndex = 9
+VisualTab:AddDropdown("激光颜色", {"Blue", "Red", "Green", "Purple", "Gold", "Cyan", "Neon Pink", "Lime", "White", "Rainbow"}, function(selected)
+    settings.tracerColorName = selected
+end)
 
-    local itemList = Instance.new("UIListLayout", itemsFrame)
-    itemList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    itemList.Padding = UDim.new(0, 2)
+VisualTab:AddDropdown("激光形状", {"Line", "Beam", "Cylinder", "Rope", "Particles", "Neon Box", "Lightning", "Pulse Rings"}, function(selected)
+    settings.tracerShape = selected
+end)
 
-    local isOpen = false
-    local colorList = {"Blue", "Red", "Green", "Purple", "Gold", "Cyan", "Neon Pink", "Lime", "White", "Rainbow"}
+VisualTab:AddToggle("彩色物品 (Rainbow)", false, function(state)
+    settings.rainbowItems = state
+end)
 
-    for _, cName in ipairs(colorList) do
-        local subBtn = Instance.new("TextButton", itemsFrame)
-        subBtn.Size = UDim2.new(0.88, 0, 0, 20)
-        subBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 75)
-        subBtn.BackgroundTransparency = 0.4
-        subBtn.Text = cName
-        subBtn.TextColor3 = LaserColors[cName] or Color3.fromRGB(255, 255, 255)
-        subBtn.Font = Enum.Font.GothamBold
-        subBtn.TextSize = 11
-        subBtn.ZIndex = 10
-        Instance.new("UICorner", subBtn).CornerRadius = UDim.new(0, 5)
+-- --- [Tab 3: 玩家机动] ---
+PlayerTab:AddToggle("天空跳跃 (Sky Jump)", false, function(state)
+    settings.skyJump = state
+end)
 
-        subBtn.MouseButton1Click:Connect(function()
-            settings.tracerColorName = cName
-            mainBtn.Text = "轨道颜色: " .. cName .. " ▾"
-            isOpen = false
-            TweenService:Create(container, TweenInfo.new(0.2), {Size = UDim2.new(0.9, 0, 0, 32)}):Play()
-        end)
-    end
+PlayerTab:AddToggle("速度加速 (Speed Hack)", false, function(state)
+    settings.speedHack = state
+end)
 
-    mainBtn.MouseButton1Click:Connect(function()
-        isOpen = not isOpen
-        mainBtn.Text = "轨道颜色: " .. settings.tracerColorName .. (isOpen and " ▴" or " ▾")
-        local targetHeight = isOpen and 260 or 32
-        TweenService:Create(container, TweenInfo.new(0.2), {Size = UDim2.new(0.9, 0, 0, targetHeight)}):Play()
-    end)
-end
+PlayerTab:AddToggle("穿墙模式 (Noclip)", false, function(state)
+    settings.noclip = state
+    zhiUI:Notify("穿墙", state and "穿墙已开启" or "穿墙已关闭", 2)
+end)
 
--- 形状下拉框 (扩展 8 种形状)
-local function createShapeDropdown()
-    local container = Instance.new("Frame", ScrollContainer)
-    container.Size = UDim2.new(0.9, 0, 0, 32)
-    container.BackgroundColor3 = Color3.fromRGB(30, 35, 50)
-    container.BackgroundTransparency = 0.5
-    container.ClipsDescendants = true
-    container.ZIndex = 5
-    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
-    
-    local stroke = Instance.new("UIStroke", container)
-    stroke.Color = Color3.fromRGB(255, 255, 255)
-    stroke.Transparency = 0.85
+PlayerTab:AddToggle("陀螺自转 (Spinbot)", false, function(state)
+    settings.spinBot = state
+end)
 
-    local mainBtn = Instance.new("TextButton", container)
-    mainBtn.Size = UDim2.new(1, 0, 0, 32)
-    mainBtn.BackgroundTransparency = 1
-    mainBtn.Text = "轨道形状: Beam ▾"
-    mainBtn.TextColor3 = Color3.fromRGB(0, 220, 255)
-    mainBtn.Font = Enum.Font.GothamMedium
-    mainBtn.TextSize = 12
-    mainBtn.ZIndex = 6
-
-    local itemsFrame = Instance.new("Frame", container)
-    itemsFrame.Size = UDim2.new(1, 0, 0, 210)
-    itemsFrame.Position = UDim2.new(0, 0, 0, 34)
-    itemsFrame.BackgroundTransparency = 1
-    itemsFrame.ZIndex = 6
-
-    local itemList = Instance.new("UIListLayout", itemsFrame)
-    itemList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    itemList.Padding = UDim.new(0, 2)
-
-    local isOpen = false
-    local shapes = {
-        {name = "Line", label = "Line (细线激光)"},
-        {name = "Beam", label = "Beam (动态流光)"},
-        {name = "Cylinder", label = "Cylinder (高亮光柱)"},
-        {name = "Rope", label = "Rope (螺旋光绳)"},
-        {name = "Particles", label = "Particles (火花粒子)"},
-        {name = "Neon Box", label = "Neon Box (发光方块)"},
-        {name = "Lightning", label = "Lightning (雷击闪电)"},
-        {name = "Pulse Rings", label = "Pulse Rings (脉冲光环)"}
-    }
-
-    for _, sData in ipairs(shapes) do
-        local subBtn = Instance.new("TextButton", itemsFrame)
-        subBtn.Size = UDim2.new(0.88, 0, 0, 22)
-        subBtn.BackgroundColor3 = Color3.fromRGB(45, 60, 80)
-        subBtn.BackgroundTransparency = 0.4
-        subBtn.Text = sData.label
-        subBtn.TextColor3 = Color3.fromRGB(220, 230, 255)
-        subBtn.Font = Enum.Font.GothamMedium
-        subBtn.TextSize = 10
-        subBtn.ZIndex = 7
-        Instance.new("UICorner", subBtn).CornerRadius = UDim.new(0, 5)
-
-        subBtn.MouseButton1Click:Connect(function()
-            settings.tracerShape = sData.name
-            mainBtn.Text = "轨道形状: " .. sData.name .. " ▾"
-            isOpen = false
-            TweenService:Create(container, TweenInfo.new(0.2), {Size = UDim2.new(0.9, 0, 0, 32)}):Play()
-        end)
-    end
-
-    mainBtn.MouseButton1Click:Connect(function()
-        isOpen = not isOpen
-        mainBtn.Text = "轨道形状: " .. settings.tracerShape .. (isOpen and " ▴" or " ▾")
-        local targetHeight = isOpen and 245 or 32
-        TweenService:Create(container, TweenInfo.new(0.2), {Size = UDim2.new(0.9, 0, 0, targetHeight)}):Play()
-    end)
-end
-
--- 队伍白名单多选下拉框
-local function createTeamDropdown()
-    local container = Instance.new("Frame", ScrollContainer)
-    container.Size = UDim2.new(0.9, 0, 0, 32)
-    container.BackgroundColor3 = Color3.fromRGB(30, 35, 50)
-    container.BackgroundTransparency = 0.5
-    container.ClipsDescendants = true
-    container.ZIndex = 3
-    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
-    
-    local stroke = Instance.new("UIStroke", container)
-    stroke.Color = Color3.fromRGB(255, 255, 255)
-    stroke.Transparency = 0.85
-
-    local mainBtn = Instance.new("TextButton", container)
-    mainBtn.Size = UDim2.new(1, 0, 0, 32)
-    mainBtn.BackgroundTransparency = 1
-    mainBtn.Text = "队伍白名单 (0) ▾"
-    mainBtn.TextColor3 = Color3.fromRGB(200, 205, 220)
-    mainBtn.Font = Enum.Font.GothamMedium
-    mainBtn.TextSize = 12
-    mainBtn.ZIndex = 4
-
-    local itemsFrame = Instance.new("Frame", container)
-    itemsFrame.Size = UDim2.new(1, 0, 0, 95)
-    itemsFrame.Position = UDim2.new(0, 0, 0, 34)
-    itemsFrame.BackgroundTransparency = 1
-    itemsFrame.ZIndex = 4
-
-    local itemList = Instance.new("UIListLayout", itemsFrame)
-    itemList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    itemList.Padding = UDim.new(0, 3)
-
-    local isOpen = false
-    local teams = {"Inmates", "Guards", "Criminals"}
-
-    local function updateText()
-        local count = 0
-        for _, v in pairs(ProtectedTeams) do
-            if v then count = count + 1 end
-        end
-        mainBtn.Text = "队伍白名单 (" .. count .. ") " .. (isOpen and "▴" or "▾")
-    end
-
-    for _, teamName in ipairs(teams) do
-        local subBtn = Instance.new("TextButton", itemsFrame)
-        subBtn.Size = UDim2.new(0.85, 0, 0, 24)
-        subBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 75)
-        subBtn.BackgroundTransparency = 0.6
-        subBtn.Text = teamName .. " [✕]"
-        subBtn.TextColor3 = Color3.fromRGB(180, 180, 195)
-        subBtn.Font = Enum.Font.Gotham
-        subBtn.TextSize = 11
-        subBtn.ZIndex = 5
-        Instance.new("UICorner", subBtn).CornerRadius = UDim.new(0, 6)
-
-        subBtn.MouseButton1Click:Connect(function()
-            ProtectedTeams[teamName] = not ProtectedTeams[teamName]
-            local isSel = ProtectedTeams[teamName]
-            subBtn.Text = teamName .. (isSel and " [✓]" or " [✕]")
-            subBtn.TextColor3 = isSel and Color3.fromRGB(0, 230, 130) or Color3.fromRGB(180, 180, 195)
-            subBtn.BackgroundColor3 = isSel and Color3.fromRGB(20, 80, 50) or Color3.fromRGB(50, 55, 75)
-            updateText()
-        end)
-    end
-
-    mainBtn.MouseButton1Click:Connect(function()
-        isOpen = not isOpen
-        updateText()
-        local targetSize = isOpen and UDim2.new(0.9, 0, 0, 130) or UDim2.new(0.9, 0, 0, 32)
-        TweenService:Create(container, TweenInfo.new(0.2), {Size = targetSize}):Play()
-    end)
-end
-
--- 渲染控制菜单
-createGlassToggle("静默自瞄 (Silent Aim)", "silentAim")
-createGlassToggle("墙壁检测 (Wall Check)", "wallCheck")
-createGlassToggle("视觉激光 (Tracers)", "visualTracers")
-createColorDropdown()
-createShapeDropdown()
-createGlassToggle("秒杀拳击 (Fast Punch)", "fastPunch")
-createGlassToggle("天空跳跃 (Sky Jump)", "skyJump")
-createGlassToggle("速度加速 (Speed Hack)", "speedHack")
-createGlassToggle("穿墙模式 (Noclip)", "noclip")
-createGlassToggle("陀螺自转 (Spinbot)", "spinBot")
-createGlassToggle("彩色物品 (Rainbow)", "rainbowItems")
-createGlassToggle("自动换弹 (Auto Reload)", "autoReload")
-createGlassToggle("反手铐 (Anti Arrest)", "antiarrest")
-createGlassToggle("反电击 (Anti Tase)", "antitase")
-createTeamDropdown()
-
--- 武器获取模块
+-- --- [Tab 4: 物品获取] ---
 local function fetchWeapon(gunName)
     local giverFolder = workspace:FindFirstChild("Prison_ITEMS") and workspace.Prison_ITEMS:FindFirstChild("giver")
-    if not giverFolder then return end
+    if not giverFolder then 
+        zhiUI:Notify("错误", "未找到地图给武器区域！", 2)
+        return 
+    end
 
     local gunModel = giverFolder:FindFirstChild(gunName)
-    if not gunModel then return end
+    if not gunModel then 
+        zhiUI:Notify("错误", "找不到武器: " .. gunName, 2)
+        return 
+    end
 
     local targetPart = gunModel:FindFirstChildWhichIsA("BasePart", true)
     if not targetPart then return end
@@ -440,37 +183,45 @@ local function fetchWeapon(gunName)
         end
         task.wait(0.1)
         hrp.CFrame = savedPos
+        zhiUI:Notify("成功", "已成功获取 " .. gunName, 2)
     end
 end
 
-local function createActionButton(text, color, onClick)
-    local btn = Instance.new("TextButton", ScrollContainer)
-    btn.Size = UDim2.new(0.9, 0, 0, 30)
-    btn.BackgroundColor3 = color
-    btn.BackgroundTransparency = 0.5
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.GothamMedium
-    btn.TextSize = 12
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+ItemTab:AddButton("一键获取 AK-47", function()
+    fetchWeapon("AK-47")
+end)
 
-    local stroke = Instance.new("UIStroke", btn)
-    stroke.Color = Color3.fromRGB(255, 255, 255)
-    stroke.Transparency = 0.85
+ItemTab:AddButton("一键获取 MP5", function()
+    fetchWeapon("MP5")
+end)
 
-    btn.MouseButton1Click:Connect(onClick)
-end
-
-createActionButton("一键获取 AK-47", Color3.fromRGB(200, 80, 0), function() fetchWeapon("AK-47") end)
-createActionButton("一键获取 MP5", Color3.fromRGB(150, 0, 200), function() fetchWeapon("MP5") end)
-createActionButton("获取钥匙卡", Color3.fromRGB(0, 130, 220), function()
+ItemTab:AddButton("获取钥匙卡 (Keycard)", function()
     local source = ReplicatedStorage:FindFirstChild("Key card", true)
-    if source then source:Clone().Parent = LocalPlayer.Backpack end
+    if source then 
+        source:Clone().Parent = LocalPlayer.Backpack 
+        zhiUI:Notify("成功", "已获得钥匙卡！", 2)
+    else
+        zhiUI:Notify("失败", "未能找到钥匙卡资源", 2)
+    end
+end)
+
+-- --- [Tab 5: 防护设置] ---
+SafetyTab:AddToggle("反手铐 (Anti Arrest)", false, function(state)
+    settings.antiarrest = state
+end)
+
+SafetyTab:AddToggle("反电击 (Anti Tase)", false, function(state)
+    settings.antitase = state
 end)
 
 -- ==========================================================
--- 3. 悬浮面板：真实子弹显示 & 命中日志
+-- 3. 独立日志悬浮窗 & 弹药显示 UI (保持 Glass 视觉风格)
 -- ==========================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PrisonLife_HUD_Overlay"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
 local LogFrame = Instance.new("Frame", ScreenGui)
 LogFrame.Size = UDim2.new(0, 280, 0, 180)
 LogFrame.Position = UDim2.new(0, 15, 0, 15)
@@ -537,7 +288,6 @@ local function spawnCustomTracer(startPos, endPos, color)
     if dist <= 0.1 then return end
 
     if shape == "Beam" then
-        -- 流光 Beam 效果
         local p0 = Instance.new("Part")
         p0.Size = Vector3.new(0.05, 0.05, 0.05)
         p0.Position = startPos
@@ -572,20 +322,17 @@ local function spawnCustomTracer(startPos, endPos, color)
         Debris:AddItem(p1, 0.12)
 
     elseif shape == "Cylinder" then
-        -- 修正朝向的高亮圆柱体
         local cyl = Instance.new("Part")
         cyl.Anchored = true
         cyl.CanCollide = false
         cyl.Material = Enum.Material.Neon
         cyl.Color = color
         cyl.Size = Vector3.new(0.25, dist, 0.25)
-        -- 通过 CFrame 修正 Cylinder 默认垂直延伸的轴向
         cyl.CFrame = CFrame.new(startPos, endPos) * CFrame.new(0, 0, -dist / 2) * CFrame.Angles(math.rad(90), 0, 0)
         cyl.Parent = workspace
         Debris:AddItem(cyl, 0.1)
 
     elseif shape == "Rope" then
-        -- 螺旋绳索
         local ropePart = Instance.new("Part")
         ropePart.Anchored = true
         ropePart.CanCollide = false
@@ -607,7 +354,6 @@ local function spawnCustomTracer(startPos, endPos, color)
         Debris:AddItem(ropePart, 0.1)
 
     elseif shape == "Particles" then
-        -- 火花/星光粒子链
         local emitterPart = Instance.new("Part")
         emitterPart.Anchored = true
         emitterPart.CanCollide = false
@@ -627,7 +373,6 @@ local function spawnCustomTracer(startPos, endPos, color)
         Debris:AddItem(emitterPart, 0.12)
 
     elseif shape == "Neon Box" then
-        -- [新增] 沿着弹道的连续霓虹方块链
         local segments = math.clamp(math.floor(dist / 3), 2, 10)
         for i = 0, segments do
             local pos = startPos:Lerp(endPos, i / segments)
@@ -648,7 +393,6 @@ local function spawnCustomTracer(startPos, endPos, color)
         end
 
     elseif shape == "Lightning" then
-        -- [新增] 锯齿折线雷击特效
         local segments = math.clamp(math.floor(dist / 4), 3, 12)
         local lastPt = startPos
         for i = 1, segments do
@@ -673,7 +417,6 @@ local function spawnCustomTracer(startPos, endPos, color)
         end
 
     elseif shape == "Pulse Rings" then
-        -- [新增] 弹道路径上的扩散射频光环
         local ringCount = math.clamp(math.floor(dist / 5), 2, 8)
         for i = 1, ringCount do
             local pos = startPos:Lerp(endPos, i / ringCount)
@@ -695,7 +438,6 @@ local function spawnCustomTracer(startPos, endPos, color)
         end
 
     else
-        -- 标准 Line (极细激光线)
         local laser = Instance.new("Part")
         laser.Anchored = true
         laser.CanCollide = false
@@ -804,4 +546,137 @@ local function getNearest(maxDist)
                     end
                 end
             end
-        e
+        end
+    end
+    return nearest
+end
+
+local function getToolAmmo(tool)
+    if not tool then return nil end
+    local ammoVal = tool:FindFirstChild("CurrentAmmo")
+    if ammoVal and (ammoVal:IsA("IntValue") or ammoVal:IsA("NumberValue")) then
+        return ammoVal.Value
+    end
+    return tool:GetAttribute("CurrentAmmo")
+end
+
+local function applyRainbowRecursive(object, color)
+    for _, child in ipairs(object:GetChildren()) do
+        if child:IsA("BasePart") then
+            child.Material = Enum.Material.Glass
+            child.Color = color
+            child.Transparency = 0.2
+        end
+        applyRainbowRecursive(child, color)
+    end
+end
+
+RunService.Stepped:Connect(function()
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    if settings.noclip then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.WalkSpeed = settings.speedHack and 35 or 16
+    end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if settings.spinBot and hrp then
+        hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(45), 0)
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    local tool = char:FindFirstChildOfClass("Tool")
+    local currentAmmo = getToolAmmo(tool)
+
+    -- 1. 秒杀拳击（白名单过滤）
+    if settings.fastPunch and MeleeEvent then
+        local punchTarget = getNearest(15)
+        if punchTarget then
+            pcall(function()
+                MeleeEvent:FireServer(punchTarget, 1, 1)
+            end)
+        end
+    end
+
+    -- 2. 弹药监控 & 自动换弹
+    if tool and currentAmmo ~= nil then
+        AmmoText.Text = "AMMO: " .. tostring(currentAmmo)
+        if settings.autoReload and currentAmmo <= 0 and not isReloading then
+            isReloading = true
+            AmmoText.Text = "RELOADING"
+            AmmoText.TextColor3 = Color3.fromRGB(255, 170, 0)
+            
+            task.spawn(function()
+                pcall(function() ReloadRemote:InvokeServer() end)
+                task.wait(1.5)
+                isReloading = false
+                AmmoText.TextColor3 = Color3.fromRGB(0, 200, 255)
+            end)
+        end
+    else
+        AmmoText.Text = "AMMO: --"
+        AmmoText.TextColor3 = Color3.fromRGB(0, 200, 255)
+    end
+
+    -- 3. 彩色物品
+    if settings.rainbowItems then
+        local rainbowColor = getRainbowColor()
+        local containers = {char, LocalPlayer:FindFirstChild("Backpack")}
+
+        for _, container in ipairs(containers) do
+            if container then
+                for _, item in ipairs(container:GetChildren()) do
+                    if item:IsA("Tool") then
+                        applyRainbowRecursive(item, rainbowColor)
+                    end
+                end
+            end
+        end
+    end
+
+    -- 4. 静默自瞄 & 优化视觉子弹轨迹
+    if settings.silentAim then
+        local target = getNearest(1500)
+        if target and tool then
+            local targetHead = target.Character.Head
+            local myHrp = char:FindFirstChild("HumanoidRootPart")
+            if not myHrp then return end
+
+            if currentAmmo == nil or currentAmmo > 0 then
+                pcall(function()
+                    ShootEvent:FireServer({{myHrp.Position, targetHead.Position, targetHead}})
+                end)
+
+                local now = tick()
+                if not lastHitLog[target.Name] or (now - lastHitLog[target.Name] > 0.2) then
+                    lastHitLog[target.Name] = now
+                    addHitLog(LocalPlayer.Name, target.Name, tool.Name)
+                end
+
+                -- 动态渲染弹道
+                if settings.visualTracers then
+                    local color = LaserColors[settings.tracerColorName] or LaserColors["Blue"]
+                    if settings.tracerColorName == "Rainbow" then
+                        color = getRainbowColor()
+                    end
+                    spawnCustomTracer(myHrp.Position, targetHead.Position, color)
+                end
+            end
+        end
+    end
+end)
+
+zhiUI:Notify("灾厄掠夺", "Prison Life V10 整合版已成功导入！", 4)
