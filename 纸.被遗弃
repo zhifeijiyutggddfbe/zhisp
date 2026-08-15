@@ -1,200 +1,757 @@
 -- ==========================================================
--- 纸.被遗弃 (极致纯净版)
--- 无通知弹窗，无表情符号
+-- 纸.被遗弃 V2
+-- zhiUI 修复整合版
 -- ==========================================================
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
 local LocalPlayer = Players.LocalPlayer
 
--- 加载 zhiUI 界面框架
-local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
+-- ==========================================================
+-- zhiUI
+-- ==========================================================
 
--- 创建主窗口
-local Window = zhiUI:CreateWindow({Title = "纸.被遗弃"})
+local zhiUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"
+))()
+
+local Window = zhiUI:CreateWindow({
+    Title = "纸.被遗弃"
+})
 
 local MainTab = Window:AddTab("主要功能")
-local ESPTab  = Window:AddTab("透视显示")
+local ESPTab = Window:AddTab("透视显示")
 local AutoTab = Window:AddTab("自动功能")
 
-local state = {
+-- ==========================================================
+-- 状态
+-- ==========================================================
+
+local State = {
     infiniteStamina = false,
     killerStamina = false,
     antiDizzy = false,
+
     autoGen = false,
-    fixInterval = 3,
+    autoCoin = false,
+
     espKillers = false,
     espSurvivors = false,
-    espItems = false,
     espGenerators = false,
-    espShadows = false,
-    autoCoin = false,
 }
 
--- 核心功能模块
+local Connections = {}
+
+local ESPObjects = {}
+
+-- ==========================================================
+-- 工具函数
+-- ==========================================================
+
+local function getCharacter()
+    return LocalPlayer.Character
+end
+
+local function getHumanoid()
+    local char = getCharacter()
+    return char and char:FindFirstChildOfClass("Humanoid")
+end
+
+local function getRoot()
+    local char = getCharacter()
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function getRemoteFolder()
+    return ReplicatedStorage:FindFirstChild("Systems")
+end
+
+-- ==========================================================
+-- 无限体力
+-- ==========================================================
+
 local function updateStamina()
     pcall(function()
-        local sprintModule = require(ReplicatedStorage.Systems.Character.Game.Sprinting)
-        if sprintModule then
-            sprintModule.StaminaLossDisabled = state.infiniteStamina
-            sprintModule.MinStamina = state.killerStamina and -100000 or 0
+        local sprinting = require(
+            ReplicatedStorage.Systems.Character.Game.Sprinting
+        )
+
+        if State.infiniteStamina then
+            sprinting.StaminaLossDisabled = true
+        else
+            sprinting.StaminaLossDisabled = false
+        end
+
+        if State.killerStamina then
+            sprinting.MinStamina = -100000
+        else
+            sprinting.MinStamina = 0
         end
     end)
 end
 
-local function triggerFixGenerator()
-    pcall(function()
-        local ingameMap = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map")
-        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if ingameMap and hrp then
-            local closestGen, closestDist = nil, math.huge
-            for _, g in ipairs(ingameMap:GetChildren()) do
-                if g.Name == "Generator" and g:FindFirstChild("Progress") and g.Progress.Value < 100 then
-                    local mainPart = g:FindFirstChild("Main") or g.PrimaryPart
-                    if mainPart then
-                        local dist = (mainPart.Position - hrp.Position).Magnitude
-                        if dist < closestDist then
-                            closestDist = dist
-                            closestGen = g
-                        end
+MainTab:AddToggle(
+    "禁用耐力消耗 (人类)",
+    false,
+    function(value)
+        State.infiniteStamina = value
+        updateStamina()
+
+        zhiUI:Notify(
+            "耐力",
+            value and "人类无限耐力已开启" or "人类无限耐力已关闭",
+            2
+        )
+    end
+)
+
+MainTab:AddToggle(
+    "无限耐力 (杀手)",
+    false,
+    function(value)
+        State.killerStamina = value
+        updateStamina()
+
+        zhiUI:Notify(
+            "耐力",
+            value and "杀手无限耐力已开启" or "杀手无限耐力已关闭",
+            2
+        )
+    end
+)
+
+-- ==========================================================
+-- 免减速 / 免眩晕
+-- ==========================================================
+
+MainTab:AddToggle(
+    "免减速/免眩晕",
+    false,
+    function(value)
+        State.antiDizzy = value
+
+        zhiUI:Notify(
+            "移动",
+            value and "移动速度锁定为 20" or "移动速度锁定已关闭",
+            2
+        )
+    end
+)
+
+table.insert(
+    Connections,
+    RunService.Heartbeat:Connect(function()
+        if not State.antiDizzy then
+            return
+        end
+
+        pcall(function()
+            local humanoid = getHumanoid()
+
+            if humanoid and humanoid.Health > 0 then
+                humanoid.WalkSpeed = 20
+            end
+        end)
+    end)
+)
+
+-- ==========================================================
+-- 自动修发电机
+-- ==========================================================
+
+local function getMap()
+    local map = workspace:FindFirstChild("Map")
+    if not map then
+        return nil
+    end
+
+    local ingame = map:FindFirstChild("Ingame")
+    if not ingame then
+        return nil
+    end
+
+    return ingame:FindFirstChild("Map")
+end
+
+local function getNearestGenerator()
+    local map = getMap()
+    local root = getRoot()
+
+    if not map or not root then
+        return nil
+    end
+
+    local nearest = nil
+    local nearestDistance = math.huge
+
+    for _, generator in ipairs(map:GetChildren()) do
+        if generator.Name == "Generator" then
+
+            local progress = generator:FindFirstChild("Progress")
+
+            if progress and progress.Value < 100 then
+
+                local main =
+                    generator:FindFirstChild("Main")
+                    or generator.PrimaryPart
+                    or generator:FindFirstChildWhichIsA(
+                        "BasePart",
+                        true
+                    )
+
+                if main then
+                    local distance =
+                        (main.Position - root.Position).Magnitude
+
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearest = generator
                     end
                 end
             end
-            if closestGen and closestGen:FindFirstChild("Remotes") and closestGen.Remotes:FindFirstChild("RE") then
-                closestGen.Remotes.RE:FireServer()
-            end
         end
+    end
+
+    return nearest
+end
+
+local function repairGenerator()
+    pcall(function()
+
+        local generator = getNearestGenerator()
+
+        if not generator then
+            return
+        end
+
+        local remotes = generator:FindFirstChild("Remotes")
+
+        if not remotes then
+            return
+        end
+
+        local remote = remotes:FindFirstChild("RE")
+
+        if remote and remote:IsA("RemoteEvent") then
+            remote:FireServer()
+        end
+
     end)
 end
 
-local function removeModelEffects(model)
-    if not model then return end
-    local highlight = model:FindFirstChild("ModelHighlight") or model:FindFirstChild("Highlight")
-    local billboard = model:FindFirstChild("NameBillboard") or model:FindFirstChild("NameLabel") or model:FindFirstChild("Shadow3DText")
-    if highlight then highlight:Destroy() end
-    if billboard then billboard:Destroy() end
+MainTab:AddToggle(
+    "自动修发电机",
+    false,
+    function(value)
+
+        State.autoGen = value
+
+        zhiUI:Notify(
+            "发电机",
+            value and "自动修发电机已开启" or "已关闭",
+            2
+        )
+
+    end
+)
+
+task.spawn(function()
+
+    while task.wait(2) do
+
+        if State.autoGen then
+            repairGenerator()
+        end
+
+    end
+
+end)
+
+-- ==========================================================
+-- ESP 核心
+-- ==========================================================
+
+local function removeESP(model)
+
+    if not model then
+        return
+    end
+
+    local data = ESPObjects[model]
+
+    if data then
+
+        if data.highlight then
+            pcall(function()
+                data.highlight:Destroy()
+            end)
+        end
+
+        if data.billboard then
+            pcall(function()
+                data.billboard:Destroy()
+            end)
+        end
+
+        ESPObjects[model] = nil
+
+    else
+
+        local highlight = model:FindFirstChild(
+            "PaperAbandonedESP"
+        )
+
+        local billboard = model:FindFirstChild(
+            "PaperAbandonedName"
+        )
+
+        if highlight then
+            highlight:Destroy()
+        end
+
+        if billboard then
+            billboard:Destroy()
+        end
+
+    end
 end
 
-local function applyESP(model, fillColor, labelText)
-    if not (model and model:IsA("Model")) then return end
-    local highlight = model:FindFirstChild("ModelHighlight") or Instance.new("Highlight")
-    highlight.Name = "ModelHighlight"
-    highlight.FillColor = fillColor
-    highlight.OutlineColor = fillColor
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+local function clearESP()
+
+    for model in pairs(ESPObjects) do
+        removeESP(model)
+    end
+
+    table.clear(ESPObjects)
+
+end
+
+local function createESP(model, color, text)
+
+    if not model or not model:IsA("Model") then
+        return
+    end
+
+    if not model.Parent then
+        return
+    end
+
+    local existing = ESPObjects[model]
+
+    if existing then
+
+        if existing.highlight then
+            existing.highlight.FillColor = color
+            existing.highlight.OutlineColor = color
+        end
+
+        if existing.label then
+            existing.label.Text = text
+            existing.label.TextColor3 = color
+        end
+
+        return
+    end
+
+    local adornee =
+        model.PrimaryPart
+        or model:FindFirstChild("HumanoidRootPart")
+        or model:FindFirstChildWhichIsA(
+            "BasePart",
+            true
+        )
+
+    if not adornee then
+        return
+    end
+
+    -- Highlight
+
+    local highlight = Instance.new("Highlight")
+
+    highlight.Name = "PaperAbandonedESP"
+    highlight.Adornee = model
+    highlight.FillColor = color
+    highlight.OutlineColor = color
+    highlight.FillTransparency = 0.45
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode =
+        Enum.HighlightDepthMode.AlwaysOnTop
+
     highlight.Parent = model
 
-    local billboard = model:FindFirstChild("NameBillboard") or Instance.new("BillboardGui")
-    billboard.Name = "NameBillboard"
-    billboard.Size = UDim2.new(0, 100, 0, 50)
-    billboard.StudsOffset = Vector3.new(0, 2, 0)
+    -- Billboard
+
+    local billboard = Instance.new("BillboardGui")
+
+    billboard.Name = "PaperAbandonedName"
+    billboard.Adornee = adornee
+    billboard.Size = UDim2.new(0, 140, 0, 35)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
     billboard.AlwaysOnTop = true
-    billboard.Adornee = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
-    
-    local textLabel = billboard:FindFirstChild("TextLabel") or Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.Text = labelText or model.Name
-    textLabel.Font = Enum.Font.SourceSansBold
-    textLabel.TextSize = 12
-    textLabel.TextColor3 = fillColor
-    textLabel.BackgroundTransparency = 1
-    textLabel.Parent = billboard
+    billboard.MaxDistance = 10000
+
+    local label = Instance.new("TextLabel")
+
+    label.Size = UDim2.fromScale(1, 1)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = color
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    label.TextStrokeTransparency = 0
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 13
+
+    label.Parent = billboard
     billboard.Parent = model
+
+    ESPObjects[model] = {
+        highlight = highlight,
+        billboard = billboard,
+        label = label,
+    }
+
 end
 
--- UI 绑定
-MainTab:AddToggle("禁用耐力消耗 (人类)", false, function(val) state.infiniteStamina = val; updateStamina() end)
-MainTab:AddToggle("无限耐力 (杀手)", false, function(val) state.killerStamina = val; updateStamina() end)
-MainTab:AddToggle("免减速/免眩晕 (锁定20移速)", false, function(val)
-    state.antiDizzy = val
-    if val then
-        task.spawn(function()
-            while state.antiDizzy do
-                pcall(function() if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then LocalPlayer.Character.Humanoid.WalkSpeed = 20 end end)
-                task.wait(0.1)
-            end
-        end)
+-- ==========================================================
+-- 杀手 ESP
+-- ==========================================================
+
+local function updateKillerESP()
+
+    if not State.espKillers then
+        return
     end
+
+    local playersFolder =
+        workspace:FindFirstChild("Players")
+
+    local killers =
+        playersFolder
+        and playersFolder:FindFirstChild("Killers")
+
+    if not killers then
+        return
+    end
+
+    for _, model in ipairs(killers:GetChildren()) do
+
+        if model:IsA("Model") then
+
+            createESP(
+                model,
+                Color3.fromRGB(255, 50, 50),
+                "杀手"
+            )
+
+        end
+    end
+
+end
+
+-- ==========================================================
+-- 幸存者 ESP
+-- ==========================================================
+
+local function updateSurvivorESP()
+
+    if not State.espSurvivors then
+        return
+    end
+
+    local playersFolder =
+        workspace:FindFirstChild("Players")
+
+    local survivors =
+        playersFolder
+        and playersFolder:FindFirstChild("Survivors")
+
+    if not survivors then
+        return
+    end
+
+    for _, model in ipairs(survivors:GetChildren()) do
+
+        if model:IsA("Model")
+            and model.Name ~= LocalPlayer.Name then
+
+            createESP(
+                model,
+                Color3.fromRGB(50, 255, 100),
+                model.Name
+            )
+
+        end
+    end
+
+end
+
+-- ==========================================================
+-- 发电机 ESP
+-- ==========================================================
+
+local function updateGeneratorESP()
+
+    if not State.espGenerators then
+        return
+    end
+
+    local map = getMap()
+
+    if not map then
+        return
+    end
+
+    for _, generator in ipairs(map:GetChildren()) do
+
+        if generator.Name == "Generator" then
+
+            local progress =
+                generator:FindFirstChild("Progress")
+
+            local value = 0
+
+            if progress then
+                value = progress.Value
+            end
+
+            if value >= 100 then
+
+                createESP(
+                    generator,
+                    Color3.fromRGB(50, 255, 100),
+                    "电机 100%"
+                )
+
+            else
+
+                createESP(
+                    generator,
+                    Color3.fromRGB(255, 80, 80),
+                    "电机 " .. math.floor(value) .. "%"
+                )
+
+            end
+        end
+    end
+
+end
+
+-- ==========================================================
+-- ESP 总刷新
+-- ==========================================================
+
+task.spawn(function()
+
+    while task.wait(0.5) do
+
+        pcall(function()
+
+            updateKillerESP()
+            updateSurvivorESP()
+            updateGeneratorESP()
+
+            for model in pairs(ESPObjects) do
+
+                if not model
+                    or not model.Parent then
+
+                    removeESP(model)
+
+                end
+
+            end
+
+        end)
+
+    end
+
 end)
 
-MainTab:AddToggle("自动修发电机", false, function(val)
-    state.autoGen = val
-    if val then
-        task.spawn(function()
-            while state.autoGen do
-                triggerFixGenerator()
-                task.wait(state.fixInterval)
-            end
-        end)
-    end
-end)
+-- ==========================================================
+-- ESP UI
+-- ==========================================================
 
-ESPTab:AddToggle("透视杀手", false, function(val)
-    state.espKillers = val
-    if val then
-        task.spawn(function()
-            while state.espKillers do
-                pcall(function()
-                    local folder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
-                    if folder then for _, c in ipairs(folder:GetChildren()) do if c:IsA("Model") then applyESP(c, Color3.fromRGB(255, 0, 0), "杀手") end end end
-                end)
-                task.wait(2)
-            end
-        end)
-    else
-        pcall(function() local folder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers") if folder then for _, c in ipairs(folder:GetChildren()) do removeModelEffects(c) end end end)
-    end
-end)
+ESPTab:AddToggle(
+    "透视杀手",
+    false,
+    function(value)
 
-ESPTab:AddToggle("透视幸存者", false, function(val)
-    state.espSurvivors = val
-    if val then
-        task.spawn(function()
-            while state.espSurvivors do
-                pcall(function()
-                    local folder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
-                    if folder then for _, c in ipairs(folder:GetChildren()) do if c:IsA("Model") and c.Name ~= LocalPlayer.Name then applyESP(c, Color3.fromRGB(0, 255, 0), c.Name) end end end
-                end)
-                task.wait(2)
-            end
-        end)
-    else
-        pcall(function() local folder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors") if folder then for _, c in ipairs(folder:GetChildren()) do removeModelEffects(c) end end end)
-    end
-end)
+        State.espKillers = value
 
-ESPTab:AddToggle("透视发电机", false, function(val)
-    state.espGenerators = val
-    if val then
-        task.spawn(function()
-            while state.espGenerators do
-                pcall(function()
-                    local mapFolder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map")
-                    if mapFolder then
-                        for _, gen in ipairs(mapFolder:GetChildren()) do
-                            if gen.Name == "Generator" then
-                                local p = gen:FindFirstChild("Progress") and gen.Progress.Value or 0
-                                applyESP(gen, p < 100 and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50), p < 100 and "电机: "..p.."%" or "完成")
-                            end
-                        end
+        if not value then
+
+            local playersFolder =
+                workspace:FindFirstChild("Players")
+
+            local killers =
+                playersFolder
+                and playersFolder:FindFirstChild("Killers")
+
+            if killers then
+
+                for _, model in ipairs(killers:GetChildren()) do
+                    removeESP(model)
+                end
+
+            end
+
+        end
+
+        zhiUI:Notify(
+            "杀手 ESP",
+            value and "已开启" or "已关闭",
+            2
+        )
+
+    end
+)
+
+ESPTab:AddToggle(
+    "透视幸存者",
+    false,
+    function(value)
+
+        State.espSurvivors = value
+
+        if not value then
+
+            local playersFolder =
+                workspace:FindFirstChild("Players")
+
+            local survivors =
+                playersFolder
+                and playersFolder:FindFirstChild("Survivors")
+
+            if survivors then
+
+                for _, model in ipairs(survivors:GetChildren()) do
+                    removeESP(model)
+                end
+
+            end
+
+        end
+
+        zhiUI:Notify(
+            "幸存者 ESP",
+            value and "已开启" or "已关闭",
+            2
+        )
+
+    end
+)
+
+ESPTab:AddToggle(
+    "透视发电机",
+    false,
+    function(value)
+
+        State.espGenerators = value
+
+        if not value then
+
+            local map = getMap()
+
+            if map then
+
+                for _, generator in ipairs(map:GetChildren()) do
+
+                    if generator.Name == "Generator" then
+                        removeESP(generator)
                     end
-                end)
-                task.wait(0.5)
+
+                end
+
             end
-        end)
-    else
-        pcall(function() local mapFolder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map") if mapFolder then for _, g in ipairs(mapFolder:GetChildren()) do if g.Name == "Generator" then removeModelEffects(g) end end end end)
+
+        end
+
+        zhiUI:Notify(
+            "发电机 ESP",
+            value and "已开启" or "已关闭",
+            2
+        )
+
     end
+)
+
+-- ==========================================================
+-- 自动功能
+-- ==========================================================
+
+AutoTab:AddToggle(
+    "自动抛硬币",
+    false,
+    function(value)
+
+        State.autoCoin = value
+
+        zhiUI:Notify(
+            "硬币",
+            value and "自动抛硬币已开启" or "已关闭",
+            2
+        )
+
+    end
+)
+
+task.spawn(function()
+
+    while task.wait(0.15) do
+
+        if State.autoCoin then
+
+            pcall(function()
+
+                local modules =
+                    ReplicatedStorage:FindFirstChild("Modules")
+
+                local network =
+                    modules
+                    and modules:FindFirstChild("Network")
+
+                local remote =
+                    network
+                    and network:FindFirstChild("RemoteEvent")
+
+                if remote then
+                    remote:FireServer(
+                        "UseActorAbility",
+                        "CoinFlip"
+                    )
+                end
+
+            end)
+
+        end
+
+    end
+
 end)
 
-AutoTab:AddToggle("自动抛硬币", false, function(val)
-    state.autoCoin = val
-    if val then
-        task.spawn(function()
-            while state.autoCoin do
-                pcall(function() ReplicatedStorage.Modules.Network.RemoteEvent:FireServer("UseActorAbility", "CoinFlip") end)
-                task.wait(0.1)
-            end
-        end)
-    end
+-- ==========================================================
+-- 重生处理
+-- ==========================================================
+
+LocalPlayer.CharacterAdded:Connect(function()
+
+    task.wait(1)
+
+    updateStamina()
+
 end)
+
+-- ==========================================================
+-- 初始化
+-- ==========================================================
+
+updateStamina()
+
+zhiUI:Notify(
+    "纸.被遗弃",
+    "V2 修复版加载完成",
+    3
+)
