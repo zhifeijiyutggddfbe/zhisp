@@ -1,149 +1,686 @@
--- 加载防HTTPSpy保护器
-loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.antihttpspy"))()
+-- ==========================================================
+-- 纸.脚本中心 v2
+-- zhiUI 通用脚本中心
+-- 单独执行版本
+-- ==========================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
-local Camera = Workspace.CurrentCamera
+local TextChatService = game:GetService("TextChatService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- 加载 zhiUI 界面框架
-local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
-
 -- ==========================================================
--- 全局设置与变量配置
+-- 加载 zhiUI
 -- ==========================================================
-local settings = {
-    flyEnabled = false,
-    flySpeed = 50,
-    noclip = false,
-    speedHack = false,
-    walkSpeed = 100,
-    skyJump = false,
-    spinBot = false,
-    silentAim = false,
-    antiFling = false,
-}
 
-local flyBodyVelocity = nil
-local flyBodyGyro = nil
+local zhiUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"
+))()
 
--- 子弹追踪 Hook
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    if method == "Raycast" and not checkcaller() and settings.silentAim then
-        local origin = args[1] or Camera.CFrame.Position
-        local target = nil
-        local dist = math.huge
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
-                local d = (p.Character.Head.Position - Camera.CFrame.Position).Magnitude
-                if d < dist then target = p.Character.Head dist = d end
-            end
-        end
-        if target then return {Instance = target, Position = target.Position, Normal = (origin - target.Position).Unit, Material = Enum.Material.Plastic, Distance = (target.Position - origin).Magnitude} end
-    end
-    return oldNamecall(self, ...)
-end))
+local Window = zhiUI:CreateWindow({
+    Title = "纸.脚本中心v2"
+})
 
--- ==========================================================
--- 1. 构建 zhiUI 窗口与 Tab 分页
--- ==========================================================
-local Window = zhiUI:CreateWindow({Title = "纸.脚本中心v2"})
-
-local GeneralTab  = Window:AddTab("通用")
+local GeneralTab = Window:AddTab("通用")
 local ExclusiveTab = Window:AddTab("专属游戏")
 local ToolTab = Window:AddTab("工具与其他")
 
 -- ==========================================================
--- 2. 界面控件配置
+-- 设置
 -- ==========================================================
 
--- Tab 1: 通用
-GeneralTab:AddToggle("开启飞行", false, function(state) settings.flyEnabled = state end)
-GeneralTab:AddToggle("开启穿墙", false, function(state) settings.noclip = state end)
-GeneralTab:AddToggle("开启加速", false, function(state) settings.speedHack = state end)
-GeneralTab:AddToggle("天空跳跃", false, function(state) settings.skyJump = state end)
-GeneralTab:AddToggle("陀螺自转", false, function(state) settings.spinBot = state end)
-GeneralTab:AddToggle("子弹追踪", false, function(state) settings.silentAim = state end)
-GeneralTab:AddToggle("防甩飞", false, function(state) settings.antiFling = state end)
+local settings = {
+    flyEnabled = false,
+    flySpeed = 50,
 
--- Tab 2: 专属游戏
-ExclusiveTab:AddButton("加载 纸.99夜", function() 
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.99%E9%9D%A2"))() 
-end)
-ExclusiveTab:AddButton("加载 纸.被遗弃", function() 
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/main/%E7%BA%B8.%E8%A2%AB%E9%81%97%E5%BC%83"))() 
-end)
-ExclusiveTab:AddButton("加载 纸.乌托邦", function() 
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/main/%E7%BA%B8.%E4%B9%8C%E6%89%98%E9%82%A61948"))() 
-end)
-ExclusiveTab:AddButton("加载 纸.监狱人生", function() 
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/main/%E7%BA%B8.%E7%9B%91%E7%8B%B1%E4%BA%BA%E7%94%9F"))() 
-end)
+    noclip = false,
 
--- Tab 3: 工具
-ToolTab:AddButton("撸管工具 R6", function() loadstring(game:HttpGet("https://pastefy.app/wa3v2Vgm/raw"))() end)
-ToolTab:AddButton("撸管工具 R15", function() loadstring(game:HttpGet("https://pastefy.app/YZoglOyJ/raw"))() end)
-ToolTab:AddButton("加载纸音乐", function() loadstring(game:HttpGet("https://raw.githubusercontent.com/114514mim/kdjddjosso/refs/heads/main/%E7%BA%B8%E9%9F%B3%E4%B9%90"))() end)
-ToolTab:AddButton("展开聊天框", function() game:GetService("TextChatService").ChatWindowConfiguration.Enabled = true end)
+    speedHack = false,
+    walkSpeed = 100,
+
+    skyJump = false,
+
+    spinBot = false,
+
+    silentAim = false,
+
+    antiFling = false,
+}
 
 -- ==========================================================
--- 3. 通用功能核心运行引擎
+-- 飞行对象
 -- ==========================================================
 
-UserInputService.JumpRequest:Connect(function()
-    if settings.skyJump and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(LocalPlayer.Character.HumanoidRootPart.Velocity.X, 65, LocalPlayer.Character.HumanoidRootPart.Velocity.Z)
-    end
-end)
+local flyBodyVelocity = nil
+local flyBodyGyro = nil
 
-RunService.RenderStepped:Connect(function()
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-
-    -- 穿墙
-    if settings.noclip then
-        for _, part in ipairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
+local function removeFlyObjects()
+    if flyBodyVelocity then
+        pcall(function()
+            flyBodyVelocity:Destroy()
+        end)
+        flyBodyVelocity = nil
     end
 
-    -- 飞行
-    if settings.flyEnabled and hrp then
-        if not flyBodyVelocity then
-            flyBodyVelocity = Instance.new("BodyVelocity", hrp) flyBodyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9) flyBodyVelocity.Velocity = Vector3.zero
-            flyBodyGyro = Instance.new("BodyGyro", hrp) flyBodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9) flyBodyGyro.CFrame = hrp.CFrame
-        end
-        local moveDir = Vector3.zero
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir += Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir -= Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir -= Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir += Camera.CFrame.RightVector end
-        flyBodyVelocity.Velocity = moveDir * settings.flySpeed
-        flyBodyGyro.CFrame = Camera.CFrame
-    else
-        if flyBodyVelocity then flyBodyVelocity:Destroy() flyBodyVelocity = nil end
-        if flyBodyGyro then flyBodyGyro:Destroy() flyBodyGyro = nil end
+    if flyBodyGyro then
+        pcall(function()
+            flyBodyGyro:Destroy()
+        end)
+        flyBodyGyro = nil
+    end
+end
+
+local function createFlyObjects(hrp)
+    removeFlyObjects()
+
+    if not hrp then
+        return
     end
 
-    -- 加速
-    if hum and settings.speedHack then hum.WalkSpeed = settings.walkSpeed end
+    flyBodyVelocity = Instance.new("BodyVelocity")
+    flyBodyVelocity.Name = "PaperFlyVelocity"
+    flyBodyVelocity.MaxForce = Vector3.new(
+        math.huge,
+        math.huge,
+        math.huge
+    )
+    flyBodyVelocity.P = 9000
+    flyBodyVelocity.Velocity = Vector3.zero
+    flyBodyVelocity.Parent = hrp
 
-    -- 陀螺自转
-    if settings.spinBot and hrp then hrp.CFrame *= CFrame.Angles(0, math.rad(30), 0) end
+    flyBodyGyro = Instance.new("BodyGyro")
+    flyBodyGyro.Name = "PaperFlyGyro"
+    flyBodyGyro.MaxTorque = Vector3.new(
+        math.huge,
+        math.huge,
+        math.huge
+    )
+    flyBodyGyro.P = 9000
+    flyBodyGyro.D = 500
+    flyBodyGyro.CFrame = hrp.CFrame
+    flyBodyGyro.Parent = hrp
+end
 
-    -- 防甩飞
-    if settings.antiFling then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local p_hrp = p.Character.HumanoidRootPart
-                if p_hrp.AssemblyAngularVelocity.Magnitude > 50 then p_hrp.AssemblyAngularVelocity = Vector3.zero end
+-- ==========================================================
+-- Silent Aim
+-- ==========================================================
+
+local function getClosestTarget()
+    local camera = Workspace.CurrentCamera
+
+    if not camera then
+        return nil
+    end
+
+    local closestHead = nil
+    local closestDistance = math.huge
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local character = player.Character
+
+            if character then
+                local humanoid =
+                    character:FindFirstChildOfClass("Humanoid")
+
+                local head =
+                    character:FindFirstChild("Head")
+
+                if humanoid and head and humanoid.Health > 0 then
+                    local distance =
+                        (head.Position - camera.CFrame.Position).Magnitude
+
+                    if distance < closestDistance then
+                        closestDistance = distance
+                        closestHead = head
+                    end
+                end
             end
         end
     end
+
+    return closestHead
+end
+
+-- ==========================================================
+-- Silent Aim Hook
+-- ==========================================================
+
+local hookInstalled = false
+
+pcall(function()
+
+    if hookmetamethod and newcclosure and getnamecallmethod then
+
+        local oldNamecall
+
+        oldNamecall = hookmetamethod(
+            game,
+            "__namecall",
+            newcclosure(function(self, ...)
+
+                local method = getnamecallmethod()
+                local args = {...}
+
+                if settings.silentAim
+                    and not checkcaller()
+                    and method == "Raycast"
+                    and typeof(args[1]) == "Vector3"
+                    and typeof(args[2]) == "Vector3"
+                then
+
+                    local targetHead = getClosestTarget()
+
+                    if targetHead then
+
+                        local origin = args[1]
+                        local direction =
+                            targetHead.Position - origin
+
+                        if direction.Magnitude > 0 then
+                            args[2] = direction
+
+                            return oldNamecall(
+                                self,
+                                unpack(args)
+                            )
+                        end
+                    end
+                end
+
+                return oldNamecall(
+                    self,
+                    unpack(args)
+                )
+            end)
+        )
+
+        hookInstalled = true
+    end
+end)
+
+-- ==========================================================
+-- 通用 UI
+-- ==========================================================
+
+GeneralTab:AddToggle(
+    "开启飞行",
+    false,
+    function(state)
+
+        settings.flyEnabled = state
+
+        if not state then
+            removeFlyObjects()
+        end
+    end
+)
+
+GeneralTab:AddSlider(
+    "飞行速度",
+    10,
+    200,
+    50,
+    function(value)
+        settings.flySpeed = value
+    end
+)
+
+GeneralTab:AddToggle(
+    "开启穿墙",
+    false,
+    function(state)
+        settings.noclip = state
+    end
+)
+
+GeneralTab:AddToggle(
+    "开启加速",
+    false,
+    function(state)
+        settings.speedHack = state
+    end
+)
+
+GeneralTab:AddSlider(
+    "移动速度",
+    16,
+    200,
+    100,
+    function(value)
+        settings.walkSpeed = value
+    end
+)
+
+GeneralTab:AddToggle(
+    "天空跳跃",
+    false,
+    function(state)
+        settings.skyJump = state
+    end
+)
+
+GeneralTab:AddToggle(
+    "陀螺自转",
+    false,
+    function(state)
+        settings.spinBot = state
+    end
+)
+
+GeneralTab:AddToggle(
+    "子弹追踪",
+    false,
+    function(state)
+        settings.silentAim = state
+    end
+)
+
+GeneralTab:AddToggle(
+    "防甩飞",
+    false,
+    function(state)
+        settings.antiFling = state
+    end
+)
+
+-- ==========================================================
+-- 专属游戏
+-- ==========================================================
+
+ExclusiveTab:AddButton(
+    "加载 纸.99夜",
+    function()
+
+        pcall(function()
+            loadstring(game:HttpGet(
+                "https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.99%E9%9D%A2"
+            ))()
+        end)
+
+    end
+)
+
+ExclusiveTab:AddButton(
+    "加载 纸.被遗弃",
+    function()
+
+        pcall(function()
+            loadstring(game:HttpGet(
+                "https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/main/%E7%BA%B8.%E8%A2%AB%E9%81%97%E5%BC%83"
+            ))()
+        end)
+
+    end
+)
+
+ExclusiveTab:AddButton(
+    "加载 纸.乌托邦",
+    function()
+
+        pcall(function()
+            loadstring(game:HttpGet(
+                "https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/main/%E7%BA%B8.%E4%B9%8C%E6%89%98%E9%82%A61948"
+            ))()
+        end)
+
+    end
+)
+
+ExclusiveTab:AddButton(
+    "加载 纸.监狱人生",
+    function()
+
+        pcall(function()
+            loadstring(game:HttpGet(
+                "https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/main/%E7%BA%B8.%E7%9B%91%E7%8B%B1%E4%BA%BA%E7%94%9F"
+            ))()
+        end)
+
+    end
+)
+
+-- ==========================================================
+-- 工具
+-- ==========================================================
+
+ToolTab:AddButton(
+    "撸管工具 R6",
+    function()
+
+        pcall(function()
+            loadstring(game:HttpGet(
+                "https://pastefy.app/wa3v2Vgm/raw"
+            ))()
+        end)
+
+    end
+)
+
+ToolTab:AddButton(
+    "撸管工具 R15",
+    function()
+
+        pcall(function()
+            loadstring(game:HttpGet(
+                "https://pastefy.app/YZoglOyJ/raw"
+            ))()
+        end)
+
+    end
+)
+
+ToolTab:AddButton(
+    "加载纸音乐",
+    function()
+
+        pcall(function()
+            loadstring(game:HttpGet(
+                "https://raw.githubusercontent.com/114514mim/kdjddjosso/refs/heads/main/%E7%BA%B8%E9%9F%B3%E4%B9%90"
+            ))()
+        end)
+
+    end
+)
+
+ToolTab:AddButton(
+    "展开聊天框",
+    function()
+
+        pcall(function()
+            TextChatService.ChatWindowConfiguration.Enabled = true
+        end)
+
+    end
+)
+
+-- ==========================================================
+-- 天空跳跃
+-- ==========================================================
+
+UserInputService.JumpRequest:Connect(function()
+
+    if not settings.skyJump then
+        return
+    end
+
+    local character = LocalPlayer.Character
+
+    if not character then
+        return
+    end
+
+    local hrp =
+        character:FindFirstChild("HumanoidRootPart")
+
+    if not hrp then
+        return
+    end
+
+    local velocity = hrp.AssemblyLinearVelocity
+
+    hrp.AssemblyLinearVelocity = Vector3.new(
+        velocity.X,
+        65,
+        velocity.Z
+    )
+end)
+
+-- ==========================================================
+-- 主运行循环
+-- ==========================================================
+
+RunService.RenderStepped:Connect(function()
+
+    local character = LocalPlayer.Character
+
+    if not character then
+        removeFlyObjects()
+        return
+    end
+
+    local humanoid =
+        character:FindFirstChildOfClass("Humanoid")
+
+    local hrp =
+        character:FindFirstChild("HumanoidRootPart")
+
+    if not humanoid or not hrp then
+        return
+    end
+
+    local camera =
+        Workspace.CurrentCamera
+
+    -- ======================================================
+    -- 穿墙
+    -- ======================================================
+
+    if settings.noclip then
+
+        for _, object in ipairs(character:GetDescendants()) do
+
+            if object:IsA("BasePart") then
+                object.CanCollide = false
+            end
+
+        end
+
+    end
+
+    -- ======================================================
+    -- 速度
+    -- ======================================================
+
+    if settings.speedHack then
+        humanoid.WalkSpeed = settings.walkSpeed
+    else
+        if humanoid.WalkSpeed > 16 then
+            humanoid.WalkSpeed = 16
+        end
+    end
+
+    -- ======================================================
+    -- 飞行
+    -- ======================================================
+
+    if settings.flyEnabled and camera then
+
+        if not flyBodyVelocity
+            or not flyBodyVelocity.Parent
+            or not flyBodyGyro
+            or not flyBodyGyro.Parent
+        then
+            createFlyObjects(hrp)
+        end
+
+        if flyBodyVelocity and flyBodyGyro then
+
+            local moveDirection = Vector3.zero
+
+            local forward =
+                camera.CFrame.LookVector
+
+            local right =
+                camera.CFrame.RightVector
+
+            if UserInputService:IsKeyDown(
+                Enum.KeyCode.W
+            ) then
+                moveDirection += forward
+            end
+
+            if UserInputService:IsKeyDown(
+                Enum.KeyCode.S
+            ) then
+                moveDirection -= forward
+            end
+
+            if UserInputService:IsKeyDown(
+                Enum.KeyCode.A
+            ) then
+                moveDirection -= right
+            end
+
+            if UserInputService:IsKeyDown(
+                Enum.KeyCode.D
+            ) then
+                moveDirection += right
+            end
+
+            if UserInputService:IsKeyDown(
+                Enum.KeyCode.Space
+            ) then
+                moveDirection += Vector3.new(
+                    0,
+                    1,
+                    0
+                )
+            end
+
+            if UserInputService:IsKeyDown(
+                Enum.KeyCode.LeftControl
+            ) then
+                moveDirection -= Vector3.new(
+                    0,
+                    1,
+                    0
+                )
+            end
+
+            if moveDirection.Magnitude > 0 then
+
+                moveDirection =
+                    moveDirection.Unit
+
+                flyBodyVelocity.Velocity =
+                    moveDirection *
+                    settings.flySpeed
+
+            else
+
+                flyBodyVelocity.Velocity =
+                    Vector3.zero
+
+            end
+
+            flyBodyGyro.CFrame =
+                CFrame.lookAt(
+                    hrp.Position,
+                    hrp.Position +
+                    camera.CFrame.LookVector
+                )
+        end
+
+    else
+
+        removeFlyObjects()
+
+    end
+
+    -- ======================================================
+    -- 陀螺自转
+    -- ======================================================
+
+    if settings.spinBot then
+
+        hrp.CFrame =
+            hrp.CFrame *
+            CFrame.Angles(
+                0,
+                math.rad(30),
+                0
+            )
+
+    end
+
+    -- ======================================================
+    -- 防甩飞
+    -- ======================================================
+
+    if settings.antiFling then
+
+        for _, player in ipairs(
+            Players:GetPlayers()
+        ) do
+
+            if player ~= LocalPlayer then
+
+                local otherCharacter =
+                    player.Character
+
+                if otherCharacter then
+
+                    local otherRoot =
+                        otherCharacter:FindFirstChild(
+                            "HumanoidRootPart"
+                        )
+
+                    if otherRoot then
+
+                        if otherRoot.AssemblyAngularVelocity.Magnitude > 50 then
+                            pcall(function()
+                                otherRoot.AssemblyAngularVelocity =
+                                    Vector3.zero
+                            end)
+                        end
+
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- ==========================================================
+-- 角色重生处理
+-- ==========================================================
+
+LocalPlayer.CharacterAdded:Connect(function()
+
+    removeFlyObjects()
+
+    task.wait(1)
+
+    if settings.flyEnabled then
+
+        local character =
+            LocalPlayer.Character
+
+        local hrp =
+            character and
+            character:FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+        if hrp then
+            createFlyObjects(hrp)
+        end
+    end
+end)
+
+-- ==========================================================
+-- 清理
+-- ==========================================================
+
+LocalPlayer.CharacterRemoving:Connect(function()
+    removeFlyObjects()
+end)
+
+-- ==========================================================
+-- 完成
+-- ==========================================================
+
+pcall(function()
+
+    zhiUI:Notify(
+        "纸.脚本中心v2",
+        "脚本中心加载完成",
+        3
+    )
+
 end)
