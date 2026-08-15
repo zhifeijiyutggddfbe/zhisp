@@ -1,29 +1,36 @@
 -- ==========================================================
--- 纸.99个夜晚 (Paper 99 Nights - 全功能完整独立版)
--- UI 框架：zhiUI
+-- 纸.99个夜晚
+-- Paper 99 Nights
+-- zhiUI 修正版
 -- ==========================================================
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
-local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- 1. 加载 zhiUI 界面框架
-local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
+-- ==========================================================
+-- zhiUI
+-- ==========================================================
 
--- 2. 创建窗口与 Tab 分页
-local Window = zhiUI:CreateWindow({Title = "纸.99夜"})
+local zhiUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"
+))()
 
-local MainTab   = Window:AddTab("主要战斗")
-local ItemsTab  = Window:AddTab("带来物资")
-local ESPTab    = Window:AddTab("透视显示")
-local PlantTab  = Window:AddTab("圆圈种树")
-local EnvTab    = Window:AddTab("环境调整")
+local Window = zhiUI:CreateWindow({
+    Title = "纸.99夜"
+})
+
+local MainTab  = Window:AddTab("主要战斗")
+local ItemsTab = Window:AddTab("带来物资")
+local ESPTab   = Window:AddTab("透视显示")
+local PlantTab = Window:AddTab("圆圈种树")
+local EnvTab   = Window:AddTab("环境调整")
 
 -- ==========================================================
--- 全局通用状态配置
+-- 状态
 -- ==========================================================
+
 local state = {
     stunDeer = false,
     killAura = false,
@@ -37,262 +44,544 @@ local plantConfig = {
 }
 
 -- ==========================================================
--- 1. ⚔️ 主要战斗 Tab
+-- 主要战斗
 -- ==========================================================
 
--- 无限锁血
 MainTab:AddButton("开启无限锁血", function()
+
     pcall(function()
-        local remote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("DamagePlayer")
+
+        local remote =
+            ReplicatedStorage:FindFirstChild("RemoteEvents")
+            and ReplicatedStorage.RemoteEvents:FindFirstChild("DamagePlayer")
+
         if remote then
             remote:FireServer(-math.huge)
         end
+
     end)
+
 end)
 
--- 自动击晕鹿
-MainTab:AddToggle("自动击晕鹿 (Torch)", false, function(val)
-    state.stunDeer = val
-    if val then
+
+MainTab:AddToggle("自动击晕鹿 (Torch)", false, function(value)
+
+    state.stunDeer = value
+
+    if value then
+
         task.spawn(function()
+
             while state.stunDeer do
+
                 pcall(function()
-                    local deer = workspace:FindFirstChild("Characters") and workspace.Characters:FindFirstChild("Deer")
-                    local remote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("MonsterHitByTorch")
+
+                    local characters =
+                        workspace:FindFirstChild("Characters")
+
+                    local deer =
+                        characters and characters:FindFirstChild("Deer")
+
+                    local remote =
+                        ReplicatedStorage:FindFirstChild("RemoteEvents")
+                        and ReplicatedStorage.RemoteEvents:FindFirstChild("MonsterHitByTorch")
+
                     if deer and remote then
                         remote:InvokeServer(deer)
                     end
+
                 end)
+
                 task.wait(0.5)
+
             end
+
         end)
+
     end
+
 end)
 
--- 杀戮光环 (需装备武器)
-MainTab:AddToggle("杀戮光环 (手持近战武器)", false, function(val)
-    state.killAura = val
-    if val then
+
+MainTab:AddToggle("杀戮光环 (手持近战武器)", false, function(value)
+
+    state.killAura = value
+
+    if value then
+
         task.spawn(function()
-            local ValidWeapons = {["Old Axe"]=true, ["Good Axe"]=true, ["Spear"]=true, ["Hatchet"]=true, ["Strong Axe"]=true, ["Bone Club"]=true}
+
+            local ValidWeapons = {
+                ["Old Axe"] = true,
+                ["Good Axe"] = true,
+                ["Spear"] = true,
+                ["Hatchet"] = true,
+                ["Strong Axe"] = true,
+                ["Bone Club"] = true
+            }
+
             while state.killAura do
-                pcall(function()
-                    local char = LocalPlayer.Character
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    local toolHandle = char and char:FindFirstChild("ToolHandle")
-                    local attackRemote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("ToolDamageObject")
 
-                    if hrp and toolHandle and attackRemote then
-                        local currentTool = toolHandle:FindFirstChild("OriginalItem") and toolHandle.OriginalItem.Value
-                        if currentTool and ValidWeapons[currentTool.Name] then
-                            local chars = workspace:FindFirstChild("Characters")
-                            if chars then
-                                for _, enemy in ipairs(chars:GetChildren()) do
-                                    if enemy:IsA("Model") and enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChild("HitRegisters") then
-                                        local dist = (hrp.Position - enemy.HumanoidRootPart.Position).Magnitude
-                                        if dist <= 100 then
-                                            attackRemote:InvokeServer(enemy, currentTool, true, hrp.CFrame)
-                                        end
-                                    end
-                                end
-                            end
-                        end
+                pcall(function()
+
+                    local char = LocalPlayer.Character
+                    local hrp =
+                        char and char:FindFirstChild("HumanoidRootPart")
+
+                    local toolHandle =
+                        char and char:FindFirstChild("ToolHandle")
+
+                    local attackRemote =
+                        ReplicatedStorage:FindFirstChild("RemoteEvents")
+                        and ReplicatedStorage.RemoteEvents:FindFirstChild("ToolDamageObject")
+
+                    if not (hrp and toolHandle and attackRemote) then
+                        return
                     end
+
+                    local originalItem =
+                        toolHandle:FindFirstChild("OriginalItem")
+
+                    local currentTool =
+                        originalItem and originalItem.Value
+
+                    if not currentTool or not ValidWeapons[currentTool.Name] then
+                        return
+                    end
+
+                    local chars =
+                        workspace:FindFirstChild("Characters")
+
+                    if not chars then
+                        return
+                    end
+
+                    for _, enemy in ipairs(chars:GetChildren()) do
+
+                        if enemy:IsA("Model")
+                        and enemy:FindFirstChild("HumanoidRootPart")
+                        and enemy:FindFirstChild("HitRegisters") then
+
+                            local distance =
+                                (hrp.Position - enemy.HumanoidRootPart.Position).Magnitude
+
+                            if distance <= 100 then
+
+                                attackRemote:InvokeServer(
+                                    enemy,
+                                    currentTool,
+                                    true,
+                                    hrp.CFrame
+                                )
+
+                            end
+
+                        end
+
+                    end
+
                 end)
+
                 task.wait(0.5)
+
             end
+
         end)
+
     end
+
 end)
 
--- 范围自动砍树 (需装备斧头)
-MainTab:AddToggle("范围自动砍树 (手持斧头)", false, function(val)
-    state.autoChop = val
-    if val then
-        task.spawn(function()
-            local ValidAxes = {["Old Axe"]=true, ["Good Axe"]=true, ["Stone Axe"]=true, ["Iron Axe"]=true, ["Strong Axe"]=true}
-            while state.autoChop do
-                pcall(function()
-                    local char = LocalPlayer.Character
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    local toolHandle = char and char:FindFirstChild("ToolHandle")
-                    local chopRemote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("ToolDamageObject")
 
-                    if hrp and toolHandle and chopRemote then
-                        local currentTool = toolHandle:FindFirstChild("OriginalItem") and toolHandle.OriginalItem.Value
-                        if currentTool and ValidAxes[currentTool.Name] then
-                            local map = workspace:FindFirstChild("Map")
-                            if map then
-                                local treePaths = {map:FindFirstChild("Foliage"), map:FindFirstChild("Landmarks")}
-                                for _, path in ipairs(treePaths) do
-                                    if path then
-                                        for _, tree in ipairs(path:GetChildren()) do
-                                            local isValidTree = table.find({"Small Tree", "TreeBig1", "TreeBig2", "TreeBig3"}, tree.Name) ~= nil
-                                            if tree:IsA("Model") and isValidTree and tree:FindFirstChild("HitRegisters") then
-                                                local treePart = tree:FindFirstChild("Trunk") or tree:FindFirstChild("HumanoidRootPart") or tree.PrimaryPart
-                                                if treePart and (hrp.Position - treePart.Position).Magnitude <= 100 then
-                                                    chopRemote:InvokeServer(tree, currentTool, true, hrp.CFrame)
-                                                end
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end
+MainTab:AddToggle("范围自动砍树 (手持斧头)", false, function(value)
+
+    state.autoChop = value
+
+    if value then
+
+        task.spawn(function()
+
+            local ValidAxes = {
+                ["Old Axe"] = true,
+                ["Good Axe"] = true,
+                ["Stone Axe"] = true,
+                ["Iron Axe"] = true,
+                ["Strong Axe"] = true
+            }
+
+            while state.autoChop do
+
+                pcall(function()
+
+                    local char = LocalPlayer.Character
+
+                    local hrp =
+                        char and char:FindFirstChild("HumanoidRootPart")
+
+                    local toolHandle =
+                        char and char:FindFirstChild("ToolHandle")
+
+                    local chopRemote =
+                        ReplicatedStorage:FindFirstChild("RemoteEvents")
+                        and ReplicatedStorage.RemoteEvents:FindFirstChild("ToolDamageObject")
+
+                    if not (hrp and toolHandle and chopRemote) then
+                        return
                     end
+
+                    local originalItem =
+                        toolHandle:FindFirstChild("OriginalItem")
+
+                    local currentTool =
+                        originalItem and originalItem.Value
+
+                    if not currentTool or not ValidAxes[currentTool.Name] then
+                        return
+                    end
+
+                    local map =
+                        workspace:FindFirstChild("Map")
+
+                    if not map then
+                        return
+                    end
+
+                    local folders = {
+                        map:FindFirstChild("Foliage"),
+                        map:FindFirstChild("Landmarks")
+                    }
+
+                    for _, folder in ipairs(folders) do
+
+                        if folder then
+
+                            for _, tree in ipairs(folder:GetChildren()) do
+
+                                local validTree =
+                                    tree.Name == "Small Tree"
+                                    or tree.Name == "TreeBig1"
+                                    or tree.Name == "TreeBig2"
+                                    or tree.Name == "TreeBig3"
+
+                                if tree:IsA("Model")
+                                and validTree
+                                and tree:FindFirstChild("HitRegisters") then
+
+                                    local treePart =
+                                        tree:FindFirstChild("Trunk")
+                                        or tree:FindFirstChild("HumanoidRootPart")
+                                        or tree.PrimaryPart
+
+                                    if treePart then
+
+                                        local distance =
+                                            (hrp.Position - treePart.Position).Magnitude
+
+                                        if distance <= 100 then
+
+                                            chopRemote:InvokeServer(
+                                                tree,
+                                                currentTool,
+                                                true,
+                                                hrp.CFrame
+                                            )
+
+                                        end
+
+                                    end
+
+                                end
+
+                            end
+
+                        end
+
+                    end
+
                 end)
+
                 task.wait(0.6)
+
             end
+
         end)
+
     end
+
 end)
 
 -- ==========================================================
--- 2. 📦 带来物资 Tab
+-- 带来物资
 -- ==========================================================
 
 local function bringItem(itemName)
+
     pcall(function()
-        local inventory = LocalPlayer:FindFirstChild("Inventory")
-        local remotes = ReplicatedStorage:FindFirstChild("RemoteEvents")
-        local itemsFolder = workspace:FindFirstChild("Items")
-        if not (inventory and remotes and itemsFolder) then return end
 
-        local storeRemote = remotes:FindFirstChild("RequestBagStoreItem")
-        local dropRemote = remotes:FindFirstChild("RequestBagDropItem")
-        if not (storeRemote and dropRemote) then return end
+        local inventory =
+            LocalPlayer:FindFirstChild("Inventory")
 
-        -- 1. 放入背包
+        local remotes =
+            ReplicatedStorage:FindFirstChild("RemoteEvents")
+
+        local itemsFolder =
+            workspace:FindFirstChild("Items")
+
+        if not (inventory and remotes and itemsFolder) then
+            return
+        end
+
+        local storeRemote =
+            remotes:FindFirstChild("RequestBagStoreItem")
+
+        local dropRemote =
+            remotes:FindFirstChild("RequestBagDropItem")
+
+        if not (storeRemote and dropRemote) then
+            return
+        end
+
         for _, invItem in ipairs(inventory:GetChildren()) do
+
             for _, worldItem in ipairs(itemsFolder:GetChildren()) do
+
                 if worldItem.Name == itemName then
-                    storeRemote:InvokeServer(invItem, worldItem)
+                    storeRemote:InvokeServer(
+                        invItem,
+                        worldItem
+                    )
                 end
+
             end
+
         end
 
         task.wait(0.1)
 
-        -- 2. 丢出背包到脚下
-        local targetWorldItem = itemsFolder:FindFirstChild(itemName)
-        if targetWorldItem then
+        local target =
+            itemsFolder:FindFirstChild(itemName)
+
+        if target then
+
             for _, invItem in ipairs(inventory:GetChildren()) do
-                dropRemote:FireServer(invItem, targetWorldItem, true)
+
+                dropRemote:FireServer(
+                    invItem,
+                    target,
+                    true
+                )
+
             end
+
         end
+
     end)
+
 end
 
-ItemsTab:AddButton("带来木头 (Log)", function() bringItem("Log") end)
-ItemsTab:AddButton("带来煤炭 (Coal)", function() bringItem("Coal") end)
-ItemsTab:AddButton("带来生兔肉 (Morsel)", function() bringItem("Morsel") end)
-ItemsTab:AddButton("带来萝卜 (Carrot)", function() bringItem("Carrot") end)
-ItemsTab:AddButton("带来螺栓 (Bolt)", function() bringItem("Bolt") end)
-ItemsTab:AddButton("带来金属板 (Sheet Metal)", function() bringItem("Sheet Metal") end)
-ItemsTab:AddButton("带来风扇 (Broken Fan)", function() bringItem("Broken Fan") end)
-ItemsTab:AddButton("带来老收音机 (Old Radio)", function() bringItem("Old Radio") end)
-ItemsTab:AddButton("带来老旧手电筒 (Old Flashlight)", function() bringItem("Old Flashlight") end)
-ItemsTab:AddButton("带来燃料罐 (Fuel Canister)", function() bringItem("Fuel Canister") end)
-ItemsTab:AddButton("带来手枪 (Revolver)", function() bringItem("Revolver") end)
-ItemsTab:AddButton("带来手枪弹药 (Revolver Ammo)", function() bringItem("Revolver Ammo") end)
-ItemsTab:AddButton("带来步枪弹药 (Rifle Ammo)", function() bringItem("Rifle Ammo") end)
+
+local items = {
+    {"带来木头 (Log)", "Log"},
+    {"带来煤炭 (Coal)", "Coal"},
+    {"带来生兔肉 (Morsel)", "Morsel"},
+    {"带来萝卜 (Carrot)", "Carrot"},
+    {"带来螺栓 (Bolt)", "Bolt"},
+    {"带来金属板 (Sheet Metal)", "Sheet Metal"},
+    {"带来风扇 (Broken Fan)", "Broken Fan"},
+    {"带来老收音机 (Old Radio)", "Old Radio"},
+    {"带来老旧手电筒 (Old Flashlight)", "Old Flashlight"},
+    {"带来燃料罐 (Fuel Canister)", "Fuel Canister"},
+    {"带来手枪 (Revolver)", "Revolver"},
+    {"带来手枪弹药 (Revolver Ammo)", "Revolver Ammo"},
+    {"带来步枪弹药 (Rifle Ammo)", "Rifle Ammo"},
+}
+
+for _, item in ipairs(items) do
+
+    ItemsTab:AddButton(
+        item[1],
+        function()
+            bringItem(item[2])
+        end
+    )
+
+end
 
 -- ==========================================================
--- 3. 👁️ 透视显示 Tab
+-- 透视
 -- ==========================================================
 
-ESPTab:AddToggle("透视所有生物 (Billboard)", false, function(val)
-    state.espMonsters = val
-    if val then
-        task.spawn(function()
-            while state.espMonsters do
-                pcall(function()
-                    local chars = workspace:FindFirstChild("Characters")
-                    if chars then
-                        for _, model in ipairs(chars:GetChildren()) do
-                            if model:IsA("Model") and not model:FindFirstChild("ModelNameBillboard") then
-                                local billboard = Instance.new("BillboardGui")
-                                billboard.Name = "ModelNameBillboard"
-                                billboard.Adornee = model
-                                billboard.Size = UDim2.new(5, 0, 1, 0)
-                                billboard.StudsOffset = Vector3.new(0, 3, 0)
-                                billboard.AlwaysOnTop = true
-                                billboard.MaxDistance = 1000000
+local function createESP(model)
 
-                                local label = Instance.new("TextLabel")
-                                label.Size = UDim2.new(1, 0, 1, 0)
-                                label.BackgroundTransparency = 1
-                                label.Text = model.Name
-                                label.Font = Enum.Font.SourceSansBold
-                                label.TextSize = 18
-                                label.TextColor3 = Color3.fromRGB(255, 50, 50)
-                                label.TextStrokeTransparency = 0.3
-                                label.Parent = billboard
-
-                                billboard.Parent = model
-                            end
-                        end
-                    end
-                end)
-                task.wait(1)
-            end
-        end)
-    else
-        pcall(function()
-            local chars = workspace:FindFirstChild("Characters")
-            if chars then
-                for _, model in ipairs(chars:GetChildren()) do
-                    local bb = model:FindFirstChild("ModelNameBillboard")
-                    if bb then bb:Destroy() end
-                end
-            end
-        end)
+    if not model:IsA("Model") then
+        return
     end
+
+    if model:FindFirstChild("ModelNameBillboard") then
+        return
+    end
+
+    local billboard = Instance.new("BillboardGui")
+
+    billboard.Name = "ModelNameBillboard"
+    billboard.Adornee = model
+    billboard.Size = UDim2.new(5, 0, 1, 0)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 1000000
+
+    local label = Instance.new("TextLabel")
+
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = model.Name
+    label.Font = Enum.Font.SourceSansBold
+    label.TextSize = 18
+    label.TextColor3 = Color3.fromRGB(255, 50, 50)
+    label.TextStrokeTransparency = 0.3
+    label.Parent = billboard
+
+    billboard.Parent = model
+
+end
+
+
+local function clearESP()
+
+    local chars =
+        workspace:FindFirstChild("Characters")
+
+    if not chars then
+        return
+    end
+
+    for _, model in ipairs(chars:GetChildren()) do
+
+        local billboard =
+            model:FindFirstChild("ModelNameBillboard")
+
+        if billboard then
+            billboard:Destroy()
+        end
+
+    end
+
+end
+
+
+ESPTab:AddToggle("透视所有生物 (Billboard)", false, function(value)
+
+    state.espMonsters = value
+
+    if value then
+
+        task.spawn(function()
+
+            while state.espMonsters do
+
+                pcall(function()
+
+                    local chars =
+                        workspace:FindFirstChild("Characters")
+
+                    if chars then
+
+                        for _, model in ipairs(chars:GetChildren()) do
+                            createESP(model)
+                        end
+
+                    end
+
+                end)
+
+                task.wait(1)
+
+            end
+
+        end)
+
+    else
+
+        clearESP()
+
+    end
+
 end)
 
 -- ==========================================================
--- 4. 🌱 圆圈种树 Tab
+-- 圆圈种树
 -- ==========================================================
 
 PlantTab:AddButton("一键圆圈自动种树 (Sapling)", function()
+
     task.spawn(function()
+
         pcall(function()
-            local remotes = ReplicatedStorage:FindFirstChild("RemoteEvents")
-            local plantRemote = remotes and remotes:FindFirstChild("RequestPlantItem")
-            local sapling = workspace:FindFirstChild("Items") and workspace.Items:FindFirstChild("Sapling")
-            local char = LocalPlayer.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
 
-            if plantRemote and sapling and hrp then
-                local radius = plantConfig.radius
-                local angleStep = plantConfig.angleStep
-                local fixedY = hrp.Position.Y
+            local remotes =
+                ReplicatedStorage:FindFirstChild("RemoteEvents")
 
-                for angle = 0, 350, angleStep do
-                    local rad = math.rad(angle)
-                    local pos = Vector3.new(
-                        hrp.Position.X + radius * math.cos(rad),
-                        fixedY,
-                        hrp.Position.Z + radius * math.sin(rad)
-                    )
-                    plantRemote:InvokeServer(sapling, pos)
-                    task.wait(0.1)
-                end
+            local plantRemote =
+                remotes and remotes:FindFirstChild("RequestPlantItem")
+
+            local sapling =
+                workspace:FindFirstChild("Items")
+                and workspace.Items:FindFirstChild("Sapling")
+
+            local char =
+                LocalPlayer.Character
+
+            local hrp =
+                char and char:FindFirstChild("HumanoidRootPart")
+
+            if not (plantRemote and sapling and hrp) then
+                return
             end
+
+            local radius = plantConfig.radius
+            local angleStep = plantConfig.angleStep
+            local fixedY = hrp.Position.Y
+
+            for angle = 0, 350, angleStep do
+
+                local rad = math.rad(angle)
+
+                local pos = Vector3.new(
+                    hrp.Position.X + radius * math.cos(rad),
+                    fixedY,
+                    hrp.Position.Z + radius * math.sin(rad)
+                )
+
+                plantRemote:InvokeServer(
+                    sapling,
+                    pos
+                )
+
+                task.wait(0.1)
+
+            end
+
         end)
+
     end)
+
 end)
 
 -- ==========================================================
--- 5. ☀️ 环境调整 Tab
+-- 环境调整
 -- ==========================================================
 
 EnvTab:AddButton("开启全图无夜 (白天)", function()
+
     pcall(function()
+
         Lighting.Brightness = 2
         Lighting.ClockTime = 14
         Lighting.FogEnd = 100000
         Lighting.GlobalShadows = false
-        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+        Lighting.OutdoorAmbient =
+            Color3.fromRGB(128, 128, 128)
+
     end)
+
 end)
