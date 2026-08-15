@@ -1,5 +1,5 @@
 -- ==========================================================
--- Prison Life Custom Hub (灾厄掠夺·重构版 - zhiUI 驱动)
+-- Prison Life Custom Hub (灾厄掠夺·重构版 - zhiUI 驱动 V11)
 -- ==========================================================
 
 local Players = game:GetService("Players")
@@ -25,10 +25,12 @@ local settings = {
     silentAim = false,
     wallCheck = true,
     visualTracers = false,
-    tracerColorName = "Blue",  -- 默认颜色
+    tracerColorName = "Blue",  -- 默认弹道颜色
     tracerShape = "Beam",     -- 默认特效形状
     fastPunch = false,
-    rainbowItems = false,
+    customWeaponColor = false,
+    weaponColorMode = "Rainbow", -- 默认枪械颜色模式
+    customShootSound = false, -- 是否开启自定义玻璃击发音效
     skyJump = false,
     speedHack = false,
     noclip = false,
@@ -38,7 +40,10 @@ local settings = {
     antitase = false,
 }
 
--- 扩展激光颜色映射表
+-- 玻璃敲击音效 ID
+local GLASS_SHOOT_SOUND_ID = "rbxassetid://128763165071133"
+
+-- 扩展颜色映射表
 local LaserColors = {
     ["Blue"]      = Color3.fromRGB(0, 170, 255),
     ["Red"]       = Color3.fromRGB(255, 50, 50),
@@ -72,7 +77,7 @@ end
 -- ==========================================================
 -- 1. 构建 zhiUI 窗口与分页
 -- ==========================================================
-local Window = zhiUI:CreateWindow({Title = "纸.监狱人生"})
+local Window = zhiUI:CreateWindow({Title = "灾厄掠夺 • Prison Life"})
 
 local MainTab   = Window:AddTab("主控自瞄")
 local VisualTab = Window:AddTab("视觉渲染")
@@ -129,8 +134,18 @@ VisualTab:AddDropdown("激光形状", {"Line", "Beam", "Cylinder", "Rope", "Part
     settings.tracerShape = selected
 end)
 
-VisualTab:AddToggle("彩色物品 (Rainbow)", false, function(state)
-    settings.rainbowItems = state
+VisualTab:AddToggle("开启枪械染色", false, function(state)
+    settings.customWeaponColor = state
+    zhiUI:Notify("枪械特效", state and "枪械染色已开启" or "已恢复枪械默认外观", 2)
+end)
+
+VisualTab:AddDropdown("枪械外观颜色", {"Rainbow", "Blue", "Red", "Green", "Purple", "Gold", "Cyan", "Neon Pink", "Lime", "White"}, function(selected)
+    settings.weaponColorMode = selected
+end)
+
+VisualTab:AddToggle("玻璃击发音效", false, function(state)
+    settings.customShootSound = state
+    zhiUI:Notify("音效替换", state and "击发音效已替换为玻璃敲击声" or "恢复默认枪声", 2)
 end)
 
 -- --- [Tab 3: 玩家机动] ---
@@ -187,14 +202,8 @@ local function fetchWeapon(gunName)
     end
 end
 
-ItemTab:AddButton("一键获取 AK-47", function()
-    fetchWeapon("AK-47")
-end)
-
-ItemTab:AddButton("一键获取 MP5", function()
-    fetchWeapon("MP5")
-end)
-
+ItemTab:AddButton("一键获取 AK-47", function() fetchWeapon("AK-47") end)
+ItemTab:AddButton("一键获取 MP5", function() fetchWeapon("MP5") end)
 ItemTab:AddButton("获取钥匙卡 (Keycard)", function()
     local source = ReplicatedStorage:FindFirstChild("Key card", true)
     if source then 
@@ -206,16 +215,11 @@ ItemTab:AddButton("获取钥匙卡 (Keycard)", function()
 end)
 
 -- --- [Tab 5: 防护设置] ---
-SafetyTab:AddToggle("反手铐 (Anti Arrest)", false, function(state)
-    settings.antiarrest = state
-end)
-
-SafetyTab:AddToggle("反电击 (Anti Tase)", false, function(state)
-    settings.antitase = state
-end)
+SafetyTab:AddToggle("反手铐 (Anti Arrest)", false, function(state) settings.antiarrest = state end)
+SafetyTab:AddToggle("反电击 (Anti Tase)", false, function(state) settings.antitase = state end)
 
 -- ==========================================================
--- 3. 独立日志悬浮窗 & 弹药显示 UI (保持 Glass 视觉风格)
+-- 3. 独立日志悬浮窗 & 弹药显示 UI
 -- ==========================================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PrisonLife_HUD_Overlay"
@@ -280,7 +284,7 @@ AmmoText.Font = Enum.Font.GothamBold
 AmmoText.TextSize = 14
 
 -- ==========================================================
--- 4. 修复且升级版的弹道生成引擎 (Complete Fixed Tracer Engine)
+-- 4. 修复弹道渲染引擎 (Fixed Tracer Engine)
 -- ==========================================================
 local function spawnCustomTracer(startPos, endPos, color)
     local shape = settings.tracerShape
@@ -451,7 +455,64 @@ local function spawnCustomTracer(startPos, endPos, color)
 end
 
 -- ==========================================================
--- 5. 核心运行主循环
+-- 5. 修复版枪械染色 & 声音控制逻辑
+-- ==========================================================
+
+local function applyWeaponColor(tool, targetColor)
+    for _, part in ipairs(tool:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.Material = Enum.Material.Glass
+            part.Color = targetColor
+            part.Transparency = 0.25
+        end
+    end
+end
+
+-- 枪械颜色高频渲染循环
+task.spawn(function()
+    while true do
+        task.wait(0.05)
+        if settings.customWeaponColor then
+            local char = LocalPlayer.Character
+            if char then
+                local tool = char:FindFirstChildOfClass("Tool")
+                if tool then
+                    local colorToApply
+                    if settings.weaponColorMode == "Rainbow" then
+                        colorToApply = getRainbowColor()
+                    else
+                        colorToApply = LaserColors[settings.weaponColorMode] or Color3.fromRGB(255, 255, 255)
+                    end
+                    applyWeaponColor(tool, colorToApply)
+                end
+            end
+        end
+    end
+end)
+
+-- 监听手持武器更换击发声音与初次涂色
+local function handleToolEquipped(tool)
+    if not tool:IsA("Tool") then return end
+
+    -- 替换枪击音效
+    if settings.customShootSound then
+        local shootSound = tool:FindFirstChild("ShootSound") or tool:FindFirstChildWhichIsA("Sound", true)
+        if shootSound then
+            shootSound.SoundId = GLASS_SHOOT_SOUND_ID
+        end
+    end
+end
+
+local function setupCharacterTools(char)
+    char.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            handleToolEquipped(child)
+        end
+    end)
+end
+
+-- ==========================================================
+-- 6. 核心运行主循环
 -- ==========================================================
 
 UserInputService.JumpRequest:Connect(function()
@@ -465,6 +526,7 @@ UserInputService.JumpRequest:Connect(function()
 end)
 
 local function ConnectCharacter(char)
+    setupCharacterTools(char)
     local humanoid = char:WaitForChild("Humanoid", 5)
     local root = char:WaitForChild("HumanoidRootPart", 5)
     if not humanoid or not root then return end
@@ -516,7 +578,6 @@ local function isVisible(myHead, targetHead, targetChar)
     return false
 end
 
--- 获取适合的目标（白名单过滤）
 local function getNearest(maxDist)
     maxDist = maxDist or 1500
     local myChar = LocalPlayer.Character
@@ -560,17 +621,6 @@ local function getToolAmmo(tool)
     return tool:GetAttribute("CurrentAmmo")
 end
 
-local function applyRainbowRecursive(object, color)
-    for _, child in ipairs(object:GetChildren()) do
-        if child:IsA("BasePart") then
-            child.Material = Enum.Material.Glass
-            child.Color = color
-            child.Transparency = 0.2
-        end
-        applyRainbowRecursive(child, color)
-    end
-end
-
 RunService.Stepped:Connect(function()
     local char = LocalPlayer.Character
     if not char then return end
@@ -601,7 +651,7 @@ RunService.Heartbeat:Connect(function()
     local tool = char:FindFirstChildOfClass("Tool")
     local currentAmmo = getToolAmmo(tool)
 
-    -- 1. 秒杀拳击（白名单过滤）
+    -- 1. 秒杀拳击
     if settings.fastPunch and MeleeEvent then
         local punchTarget = getNearest(15)
         if punchTarget then
@@ -631,23 +681,7 @@ RunService.Heartbeat:Connect(function()
         AmmoText.TextColor3 = Color3.fromRGB(0, 200, 255)
     end
 
-    -- 3. 彩色物品
-    if settings.rainbowItems then
-        local rainbowColor = getRainbowColor()
-        local containers = {char, LocalPlayer:FindFirstChild("Backpack")}
-
-        for _, container in ipairs(containers) do
-            if container then
-                for _, item in ipairs(container:GetChildren()) do
-                    if item:IsA("Tool") then
-                        applyRainbowRecursive(item, rainbowColor)
-                    end
-                end
-            end
-        end
-    end
-
-    -- 4. 静默自瞄 & 优化视觉子弹轨迹
+    -- 3. 静默自瞄 & 视觉弹道
     if settings.silentAim then
         local target = getNearest(1500)
         if target and tool then
@@ -666,7 +700,6 @@ RunService.Heartbeat:Connect(function()
                     addHitLog(LocalPlayer.Name, target.Name, tool.Name)
                 end
 
-                -- 动态渲染弹道
                 if settings.visualTracers then
                     local color = LaserColors[settings.tracerColorName] or LaserColors["Blue"]
                     if settings.tracerColorName == "Rainbow" then
@@ -679,4 +712,4 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-zhiUI:Notify("灾厄掠夺", "Prison Life V10 整合版已成功导入！", 4)
+zhiUI:Notify("灾厄掠夺", "V11 枪械彩虹染色与玻璃音效版加载完成！", 4)
