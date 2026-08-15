@@ -25,548 +25,1683 @@
        ██      
        ██      
 ██████████████
---]]
--- 纸:乌托邦1984 完全整合脚本
--- 功能：无限体力(可开关)、传送、商店、攻击光环、秒砍树(可开关)、秒割小麦(可开关)、工作步骤控制、解除多拿限制、树木透视、vfly飞行、防挂机
+]]
 
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
+-- ==========================================================
+-- 纸:乌托邦1984
+-- zhiUI 独立修正版
+-- ==========================================================
+
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 
-local localPlayer = Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer
 
+-- ==========================================================
 -- 加载 zhiUI
-local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
+-- ==========================================================
 
--- ==========================================
--- 远程事件（商店、工作、攻击、砍树等）
--- ==========================================
-local JobSystem = ReplicatedStorage:WaitForChild('JobSystem')
-local StartCraftingJob = JobSystem:WaitForChild('StartCraftingJob')
-local JobAction = JobSystem:WaitForChild('JobAction')
-local BuyRemote = ReplicatedStorage:WaitForChild('MenuShopRemotes'):WaitForChild('Buy')
-local ConsumableUsed = ReplicatedStorage:WaitForChild('ConsumableUsed')
-local PunchEvent = ReplicatedStorage:WaitForChild("PunchEvent")
+local zhiUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"
+))()
 
--- 砍树相关 Remote
-local Woodcut = ReplicatedStorage:FindFirstChild("Woodcut")
-local StartWoodcut = Woodcut and Woodcut:FindFirstChild("StartWoodcut")
-local StopWoodcut = Woodcut and Woodcut:FindFirstChild("StopWoodcut")
-local TryCut = Woodcut and Woodcut:FindFirstChild("TryCut")
-local CarryAnim = Woodcut and Woodcut:FindFirstChild("CarryAnim")
+-- ==========================================================
+-- 安全获取 Remote
+-- ==========================================================
 
--- ==========================================
--- 破解并销毁 HideGrabWhileHolding 限制脚本 (多拿物品)
--- ==========================================
-local function disableGrabRestrictionScript()
+local function getRemote(parent, name)
+    if not parent then
+        return nil
+    end
+
+    return parent:FindFirstChild(name)
+end
+
+local JobSystem = ReplicatedStorage:FindFirstChild("JobSystem")
+
+local StartCraftingJob =
+    getRemote(JobSystem, "StartCraftingJob")
+
+local JobAction =
+    getRemote(JobSystem, "JobAction")
+
+local MenuShopRemotes =
+    ReplicatedStorage:FindFirstChild("MenuShopRemotes")
+
+local BuyRemote =
+    getRemote(MenuShopRemotes, "Buy")
+
+local ConsumableUsed =
+    ReplicatedStorage:FindFirstChild("ConsumableUsed")
+
+local PunchEvent =
+    ReplicatedStorage:FindFirstChild("PunchEvent")
+
+local Woodcut =
+    ReplicatedStorage:FindFirstChild("Woodcut")
+
+local StartWoodcut =
+    getRemote(Woodcut, "StartWoodcut")
+
+local StopWoodcut =
+    getRemote(Woodcut, "StopWoodcut")
+
+local TryCut =
+    getRemote(Woodcut, "TryCut")
+
+local CarryAnim =
+    getRemote(Woodcut, "CarryAnim")
+
+-- ==========================================================
+-- 状态
+-- ==========================================================
+
+local State = {
+    PunchAura = false,
+    AutoChop = false,
+    AutoWheat = false,
+    TreeESP = false,
+    InfiniteStamina = false,
+    VFly = false,
+    AntiAFK = false,
+    MultiGrab = false,
+}
+
+local PunchDelay = 0.1
+local FlySpeed = 50
+local ChopRange = 30
+
+-- ==========================================================
+-- 创建 UI
+-- ==========================================================
+
+local Window = zhiUI:CreateWindow({
+    Title = "纸:乌托邦1984"
+})
+
+local CombatTab =
+    Window:AddTab("战斗特战")
+
+local TPTab =
+    Window:AddTab("位置传送")
+
+local ShopTab =
+    Window:AddTab("快速商店")
+
+local GatherTab =
+    Window:AddTab("资源采集")
+
+local SettingTab =
+    Window:AddTab("辅助设置")
+
+-- ==========================================================
+-- 辅助通知
+-- ==========================================================
+
+local function Notify(title, text, duration)
     pcall(function()
-        local playerScripts = localPlayer:FindFirstChild("PlayerScripts")
-        if playerScripts then
-            local coreFolder = playerScripts:FindFirstChild("Core")
-            if coreFolder then
-                local targetScript = coreFolder:FindFirstChild("HideGrabWhileHolding")
-                if targetScript then
-                    targetScript.Disabled = true
-                    targetScript:Destroy()
-                end
-            end
-        end
+        zhiUI:Notify(
+            tostring(title),
+            tostring(text),
+            duration or 2
+        )
     end)
 end
 
-disableGrabRestrictionScript()
+-- ==========================================================
+-- 角色
+-- ==========================================================
+
+local function getCharacter()
+    return LocalPlayer.Character
+end
+
+local function getHumanoid()
+    local char = getCharacter()
+
+    if not char then
+        return nil
+    end
+
+    return char:FindFirstChildOfClass("Humanoid")
+end
+
+local function getHRP()
+    local char = getCharacter()
+
+    if not char then
+        return nil
+    end
+
+    return char:FindFirstChild("HumanoidRootPart")
+end
+
+-- ==========================================================
+-- 多拿物品
+-- ==========================================================
+
+local function disableGrabRestriction()
+
+    pcall(function()
+
+        local PlayerScripts =
+            LocalPlayer:FindFirstChild("PlayerScripts")
+
+        if not PlayerScripts then
+            return
+        end
+
+        local Core =
+            PlayerScripts:FindFirstChild("Core")
+
+        if not Core then
+            return
+        end
+
+        local Script =
+            Core:FindFirstChild("HideGrabWhileHolding")
+
+        if Script then
+
+            pcall(function()
+                Script.Disabled = true
+            end)
+
+            pcall(function()
+                Script:Destroy()
+            end)
+
+        end
+
+    end)
+
+end
+
+disableGrabRestriction()
+
+LocalPlayer.CharacterAdded:Connect(function()
+
+    task.wait(1)
+
+    disableGrabRestriction()
+
+end)
+
+-- ==========================================================
+-- 附近 GrabToolPrompt 自动开启
+-- ==========================================================
 
 ProximityPromptService.PromptShown:Connect(function(prompt)
-    if prompt and prompt.Name == "GrabToolPrompt" then
-        prompt.Enabled = true
+
+    if not State.MultiGrab then
+        return
     end
+
+    if prompt
+        and prompt.Name == "GrabToolPrompt"
+    then
+
+        pcall(function()
+            prompt.Enabled = true
+        end)
+
+    end
+
 end)
 
 task.spawn(function()
+
     while task.wait(0.5) do
-        pcall(function()
-            local hrp = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local overlapParams = OverlapParams.new()
-                overlapParams.FilterType = Enum.OverlapFilterType.Exclude
-                overlapParams.FilterDescendantsInstances = { localPlayer.Character }
 
-                local parts = Workspace:GetPartBoundsInRadius(hrp.Position, 50, overlapParams)
-                for _, part in ipairs(parts) do
-                    for _, descendant in ipairs(part:GetDescendants()) do
-                        if descendant:IsA("ProximityPrompt") and descendant.Name == "GrabToolPrompt" then
-                            if not descendant.Enabled then
-                                descendant.Enabled = true
-                            end
-                        end
+        if not State.MultiGrab then
+            continue
+        end
+
+        pcall(function()
+
+            local hrp = getHRP()
+
+            if not hrp then
+                return
+            end
+
+            local params = OverlapParams.new()
+
+            params.FilterType =
+                Enum.RaycastFilterType.Exclude
+
+            local char = getCharacter()
+
+            params.FilterDescendantsInstances = {
+                char
+            }
+
+            local parts =
+                Workspace:GetPartBoundsInRadius(
+                    hrp.Position,
+                    50,
+                    params
+                )
+
+            for _, part in ipairs(parts) do
+
+                for _, obj in ipairs(part:GetDescendants()) do
+
+                    if obj:IsA("ProximityPrompt")
+                        and obj.Name == "GrabToolPrompt"
+                    then
+
+                        obj.Enabled = true
+
                     end
+
                 end
+
             end
+
         end)
+
     end
+
 end)
 
-localPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-    disableGrabRestrictionScript()
-end)
+-- ==========================================================
+-- 无限体力
+-- ==========================================================
 
--- ==========================================
--- 无限体力系统（可开关，带恢复）
--- ==========================================
-local staminaData = {}
-local function findAndModifyStamina(modify)
-    for _, v in pairs(getgc(true)) do
-        if type(v) == "table" and rawget(v, "MaxStamina") and rawget(v, "DrainRate") then
-            if not staminaData.original then
-                staminaData.original = {
-                    DrainRate = v.DrainRate,
-                    JumpCost = v.Costs and v.Costs.Jump or 0,
-                    ExhaustionTime = v.ExhaustionTime or 0,
-                }
-            end
-            if modify then
-                v.DrainRate = 0
-                if v.Costs then v.Costs.Jump = 0 end
-                v.ExhaustionTime = 0
-            else
-                if staminaData.original then
-                    v.DrainRate = staminaData.original.DrainRate
-                    if v.Costs then v.Costs.Jump = staminaData.original.JumpCost end
-                    v.ExhaustionTime = staminaData.original.ExhaustionTime
+local StaminaOriginal = nil
+
+local function findAndModifyStamina(enable)
+
+    if type(getgc) ~= "function" then
+        return false
+    end
+
+    local found = false
+
+    pcall(function()
+
+        for _, v in ipairs(getgc(true)) do
+
+            if type(v) == "table"
+                and rawget(v, "MaxStamina")
+                and rawget(v, "DrainRate")
+            then
+
+                found = true
+
+                if not StaminaOriginal then
+
+                    StaminaOriginal = {
+                        DrainRate = v.DrainRate,
+
+                        JumpCost =
+                            v.Costs
+                            and v.Costs.Jump
+                            or 0,
+
+                        ExhaustionTime =
+                            v.ExhaustionTime
+                            or 0,
+                    }
+
                 end
+
+                if enable then
+
+                    v.DrainRate = 0
+
+                    if v.Costs then
+                        v.Costs.Jump = 0
+                    end
+
+                    v.ExhaustionTime = 0
+
+                else
+
+                    if StaminaOriginal then
+
+                        v.DrainRate =
+                            StaminaOriginal.DrainRate
+
+                        if v.Costs then
+                            v.Costs.Jump =
+                                StaminaOriginal.JumpCost
+                        end
+
+                        v.ExhaustionTime =
+                            StaminaOriginal.ExhaustionTime
+
+                    end
+
+                end
+
             end
-            return true
+
         end
-    end
-    return false
+
+    end)
+
+    return found
+
 end
 
--- ==========================================
--- 创建窗口
--- ==========================================
-local Window = zhiUI:CreateWindow({Title = "纸:乌托邦1984"})
+-- ==========================================================
+-- 战斗：攻击光环
+-- ==========================================================
 
-local CombatTab = Window:AddTab("战斗特战")
-local TPTab = Window:AddTab("位置传送")
-local ShopTab = Window:AddTab("快速商店")
-local GatherTab = Window:AddTab("资源采集")
-local SettingTab = Window:AddTab("辅助设置")
+local lastPunch = 0
 
--- ==========================================
--- 战斗特战 Tab (攻击光环)
--- ==========================================
-local punchAuraRunning = false
-local punchCooldown = 0.1
+CombatTab:AddToggle(
+    "开启攻击光环",
+    false,
+    function(value)
 
-CombatTab:AddToggle('开启攻击光环', false, function(state)
-    punchAuraRunning = state
-    zhiUI:Notify("攻击光环", state and "拳击自动攻击已开启" or "已关闭", 2)
-end)
+        State.PunchAura = value
 
-CombatTab:AddSlider('攻击间隔速度 (0.1秒起)', 1, 10, 1, function(val)
-    punchCooldown = val * 0.1
-end)
+        Notify(
+            "攻击光环",
+            value
+            and "攻击光环已开启"
+            or "攻击光环已关闭",
+            2
+        )
 
-local lastPunchTime = 0
+    end
+)
+
+CombatTab:AddSlider(
+    "攻击间隔速度",
+    1,
+    10,
+    1,
+    function(value)
+
+        PunchDelay = value * 0.1
+
+    end
+)
+
 RunService.Heartbeat:Connect(function()
-    if punchAuraRunning then
-        local currentTime = os.clock()
-        if currentTime - lastPunchTime >= punchCooldown then
-            lastPunchTime = currentTime
-            PunchEvent:FireServer()
-        end
+
+    if not State.PunchAura then
+        return
     end
-end)
 
--- ==========================================
--- 位置传送 Tab
--- ==========================================
-local locations = {
-    {name = "工厂 (Factory)", cframe = CFrame.new(476.9, 9, 325.3)},
-    {name = "商店 (Shop)", cframe = CFrame.new(409.8, 9, 226.4)},
-    {name = "黑市 (Black Market)", cframe = CFrame.new(540.6, 9, 204)},
-    {name = "配给中心 (Rations Center)", cframe = CFrame.new(333.2, 9, 305.7)},
-    {name = "杂货铺 (General Store)", cframe = CFrame.new(332, 9, 21)},
-    {name = "警察总部 (Police HQ)", cframe = CFrame.new(336.3, 9, -31.6)},
-    {name = "银行 (Bank)", cframe = CFrame.new(540.5, 9, -85.4)},
-    {name = "医疗中心 (Medical Center)", cframe = CFrame.new(542.1, 9, -39.3)},
-    {name = "理发店 (Barbershop)", cframe = CFrame.new(542.5, 9.1, 68.2)},
-    {name = "枪店 (Gun Store)", cframe = CFrame.new(601.7, 9, -35.7)},
-    {name = "宫殿 (Palace)", cframe = CFrame.new(633.5, 9, 1)}
-}
+    if not PunchEvent then
+        return
+    end
 
-for _, loc in ipairs(locations) do
-    TPTab:AddButton(loc.name, function()
-        local hrp = localPlayer.Character and localPlayer.Character:FindFirstChild('HumanoidRootPart')
-        if hrp then
-            hrp.CFrame = loc.cframe
-            zhiUI:Notify("传送成功！", "已到达 " .. loc.name, 2)
-        end
-    end)
-end
+    local now = os.clock()
 
--- ==========================================
--- 快速商店 Tab
--- ==========================================
-local shopItems = {
-    {text = "购买 污水 ($6)", item = "Dirty Water"},
-    {text = "购买 纯净水 ($13)", item = "Water"},
-    {text = "购买 高级水 ($26)", item = "Premium Water"},
-    {text = "购买 豆子罐头 ($13)", item = "Beans"},
-    {text = "购买 面包 ($13)", item = "Bread"},
-    {text = "购买 鹅肝 ($39)", item = "Foie Gras"}
-}
+    if now - lastPunch >= PunchDelay then
 
-for _, shopItem in ipairs(shopItems) do
-    ShopTab:AddButton(shopItem.text, function()
-        BuyRemote:FireServer(shopItem.item)
-        zhiUI:Notify("商店", "正在购买 " .. shopItem.item .. "...", 2)
-    end)
-end
+        lastPunch = now
 
-ShopTab:AddButton('立即手动进食 (水 + 豆子)', function()
-    BuyRemote:FireServer('Water')
-    task.wait(0.3)
-    ConsumableUsed:FireServer(Instance.new('Tool', nil))
-    task.wait(0.3)
-    BuyRemote:FireServer('Beans')
-    task.wait(0.3)
-    ConsumableUsed:FireServer(Instance.new('Tool', nil))
-    zhiUI:Notify("进食完毕！", "已成功购买并消耗 水 与 豆子。", 2)
-end)
-
--- ==========================================
--- 资源采集 Tab (秒砍树 + 秒割小麦 + 树木透视 + 工作打工)
--- ==========================================
-
--- ------------------------------------------
--- 工厂打工工作
--- ------------------------------------------
-local manualActions = {
-    {text = "开始工作 (碳钢)", func = function() StartCraftingJob:FireServer('Carbon Steel') end},
-    {text = "步骤：熔炼 (Smelt)", func = function() JobAction:FireServer('Smelt') end},
-    {text = "步骤：锻打 (Hammer)", func = function() JobAction:FireServer('Hammer') end},
-    {text = "步骤：淬火 (Quench)", func = function() JobAction:FireServer('Quench') end},
-    {text = "步骤：制作 (Craft)", func = function() JobAction:FireServer('Craft') end}
-}
-
-for _, btnAct in ipairs(manualActions) do
-    GatherTab:AddButton(btnAct.text, btnAct.func)
-end
-
--- ------------------------------------------
--- 秒砍树
--- ------------------------------------------
-local autoChopEnabled = false
-local CHOP_RANGE = 30
-local VALID_TOOL_NAME = "Axe"
-
-GatherTab:AddToggle('开启秒砍树', false, function(state)
-    autoChopEnabled = state
-    zhiUI:Notify("秒砍树", state and "秒砍功能已开启（拿着斧头点击树木）" or "已关闭秒砍功能", 2)
-end)
-
-local function instantChop(treeModel)
-    if not (treeModel and treeModel:IsA("Model")) then return end
-    task.spawn(function()
         pcall(function()
-            if StartWoodcut then StartWoodcut:FireServer(treeModel) end
-            task.wait(0.02)
-            if TryCut and TryCut:IsA("RemoteFunction") then
-                TryCut:InvokeServer(treeModel)
-            elseif TryCut and TryCut:IsA("RemoteEvent") then
-                TryCut:FireServer(treeModel)
-            end
-            if StopWoodcut then StopWoodcut:FireServer() end
+            PunchEvent:FireServer()
         end)
-    end)
-end
 
--- 点击树木触发秒砍
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed or not autoChopEnabled then return end
-    
-    local isMouse = input.UserInputType == Enum.UserInputType.MouseButton1
-    local isTouch = input.UserInputType == Enum.UserInputType.Touch
-
-    if isMouse or isTouch then
-        local character = localPlayer.Character
-        if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-
-        local currentTool = character:FindFirstChildOfClass("Tool")
-        if not currentTool or currentTool.Name ~= VALID_TOOL_NAME then return end
-
-        local camera = Workspace.CurrentCamera
-        if not camera then return end
-
-        local mousePos = UserInputService:GetMouseLocation()
-        local ray = camera:ViewportPointToRay(mousePos.X, mousePos.Y)
-
-        local rayParams = RaycastParams.new()
-        rayParams.FilterType = Enum.RaycastFilterType.Exclude
-        rayParams.FilterDescendantsInstances = { character }
-
-        local result = Workspace:Raycast(ray.Origin, ray.Direction * 150, rayParams)
-        if result and result.Instance then
-            local target = result.Instance
-            local model = target.Parent
-
-            while model and model ~= Workspace do
-                if model:IsA("Model") and (model.Name == "Tree" or string.find(model.Name, "Tree") or model.Name == "LumberTree") then
-                    break
-                end
-                model = model.Parent
-            end
-
-            if model and model:IsA("Model") then
-                local hrp = character.HumanoidRootPart
-                if (hrp.Position - target.Position).Magnitude <= CHOP_RANGE then
-                    instantChop(model)
-                    zhiUI:Notify("秒砍树", "成功对树木发送砍伐请求！", 1)
-                end
-            end
-        end
     end
+
 end)
 
--- ------------------------------------------
--- 秒割小麦功能
--- ------------------------------------------
-local autoHarvestWheat = false
+-- ==========================================================
+-- 传送
+-- ==========================================================
+
+local Locations = {
+
+    {
+        name = "工厂",
+        cframe = CFrame.new(
+            476.9,
+            9,
+            325.3
+        )
+    },
+
+    {
+        name = "商店",
+        cframe = CFrame.new(
+            409.8,
+            9,
+            226.4
+        )
+    },
+
+    {
+        name = "黑市",
+        cframe = CFrame.new(
+            540.6,
+            9,
+            204
+        )
+    },
+
+    {
+        name = "配给中心",
+        cframe = CFrame.new(
+            333.2,
+            9,
+            305.7
+        )
+    },
+
+    {
+        name = "杂货铺",
+        cframe = CFrame.new(
+            332,
+            9,
+            21
+        )
+    },
+
+    {
+        name = "警察总部",
+        cframe = CFrame.new(
+            336.3,
+            9,
+            -31.6
+        )
+    },
+
+    {
+        name = "银行",
+        cframe = CFrame.new(
+            540.5,
+            9,
+            -85.4
+        )
+    },
+
+    {
+        name = "医疗中心",
+        cframe = CFrame.new(
+            542.1,
+            9,
+            -39.3
+        )
+    },
+
+    {
+        name = "理发店",
+        cframe = CFrame.new(
+            542.5,
+            9.1,
+            68.2
+        )
+    },
+
+    {
+        name = "枪店",
+        cframe = CFrame.new(
+            601.7,
+            9,
+            -35.7
+        )
+    },
+
+    {
+        name = "宫殿",
+        cframe = CFrame.new(
+            633.5,
+            9,
+            1
+        )
+    },
+
+}
+
+for _, location in ipairs(Locations) do
+
+    TPTab:AddButton(
+        location.name,
+        function()
+
+            local hrp = getHRP()
+
+            if not hrp then
+                Notify(
+                    "传送",
+                    "当前没有角色",
+                    2
+                )
+                return
+            end
+
+            pcall(function()
+
+                hrp.CFrame =
+                    location.cframe
+
+            end)
+
+            Notify(
+                "传送成功",
+                "已到达 " .. location.name,
+                2
+            )
+
+        end
+    )
+
+end
+
+-- ==========================================================
+-- 快速商店
+-- ==========================================================
+
+local ShopItems = {
+
+    {
+        text = "购买 污水 ($6)",
+        item = "Dirty Water"
+    },
+
+    {
+        text = "购买 纯净水 ($13)",
+        item = "Water"
+    },
+
+    {
+        text = "购买 高级水 ($26)",
+        item = "Premium Water"
+    },
+
+    {
+        text = "购买 豆子罐头 ($13)",
+        item = "Beans"
+    },
+
+    {
+        text = "购买 面包 ($13)",
+        item = "Bread"
+    },
+
+    {
+        text = "购买 鹅肝 ($39)",
+        item = "Foie Gras"
+    },
+
+}
+
+for _, item in ipairs(ShopItems) do
+
+    ShopTab:AddButton(
+        item.text,
+        function()
+
+            if not BuyRemote then
+
+                Notify(
+                    "商店",
+                    "找不到购买 Remote",
+                    2
+                )
+
+                return
+
+            end
+
+            pcall(function()
+
+                BuyRemote:FireServer(
+                    item.item
+                )
+
+            end)
+
+            Notify(
+                "商店",
+                "已发送购买请求: "
+                    .. item.item,
+                2
+            )
+
+        end
+    )
+
+end
+
+-- ==========================================================
+-- 快速进食
+-- ==========================================================
+
+ShopTab:AddButton(
+    "立即手动进食 (水 + 豆子)",
+    function()
+
+        if not BuyRemote then
+            Notify(
+                "进食",
+                "找不到商店 Remote",
+                2
+            )
+            return
+        end
+
+        pcall(function()
+
+            BuyRemote:FireServer(
+                "Water"
+            )
+
+            task.wait(0.3)
+
+            if ConsumableUsed then
+
+                ConsumableUsed:FireServer(
+                    Instance.new("Tool")
+                )
+
+            end
+
+            task.wait(0.3)
+
+            BuyRemote:FireServer(
+                "Beans"
+            )
+
+            task.wait(0.3)
+
+            if ConsumableUsed then
+
+                ConsumableUsed:FireServer(
+                    Instance.new("Tool")
+                )
+
+            end
+
+        end)
+
+        Notify(
+            "进食",
+            "已发送水和豆子的使用请求",
+            2
+        )
+
+    end
+)
+
+-- ==========================================================
+-- 资源采集：工作
+-- ==========================================================
+
+local ManualActions = {
+
+    {
+        text = "开始工作 (碳钢)",
+        callback = function()
+
+            if StartCraftingJob then
+
+                StartCraftingJob:FireServer(
+                    "Carbon Steel"
+                )
+
+            end
+
+        end
+    },
+
+    {
+        text = "步骤：熔炼 (Smelt)",
+        callback = function()
+
+            if JobAction then
+                JobAction:FireServer("Smelt")
+            end
+
+        end
+    },
+
+    {
+        text = "步骤：锻打 (Hammer)",
+        callback = function()
+
+            if JobAction then
+                JobAction:FireServer("Hammer")
+            end
+
+        end
+    },
+
+    {
+        text = "步骤：淬火 (Quench)",
+        callback = function()
+
+            if JobAction then
+                JobAction:FireServer("Quench")
+            end
+
+        end
+    },
+
+    {
+        text = "步骤：制作 (Craft)",
+        callback = function()
+
+            if JobAction then
+                JobAction:FireServer("Craft")
+            end
+
+        end
+    },
+
+}
+
+for _, action in ipairs(ManualActions) do
+
+    GatherTab:AddButton(
+        action.text,
+        action.callback
+    )
+
+end
+
+-- ==========================================================
+-- 秒砍树
+-- ==========================================================
+
+GatherTab:AddToggle(
+    "开启秒砍树",
+    false,
+    function(value)
+
+        State.AutoChop = value
+
+        Notify(
+            "秒砍树",
+            value
+            and "已开启，使用斧头点击树木"
+            or "已关闭",
+            2
+        )
+
+    end
+)
+
+local function isTree(model)
+
+    if not model
+        or not model:IsA("Model")
+    then
+        return false
+    end
+
+    local name = string.lower(
+        model.Name
+    )
+
+    return
+        name == "tree"
+        or string.find(name, "tree")
+        or name == "lumbertree"
+
+end
+
+local function instantChop(tree)
+
+    if not tree then
+        return
+    end
+
+    task.spawn(function()
+
+        pcall(function()
+
+            if StartWoodcut then
+                StartWoodcut:FireServer(tree)
+            end
+
+            task.wait(0.02)
+
+            if TryCut then
+
+                if TryCut:IsA("RemoteFunction") then
+
+                    TryCut:InvokeServer(tree)
+
+                elseif TryCut:IsA("RemoteEvent") then
+
+                    TryCut:FireServer(tree)
+
+                end
+
+            end
+
+            if StopWoodcut then
+                StopWoodcut:FireServer()
+            end
+
+        end)
+
+    end)
+
+end
+
+local function getTreeFromRaycast(result)
+
+    if not result then
+        return nil
+    end
+
+    local current =
+        result.Instance
+
+    while current
+        and current ~= Workspace
+    do
+
+        if isTree(current) then
+            return current
+        end
+
+        current =
+            current.Parent
+
+    end
+
+    return nil
+
+end
+
+UserInputService.InputBegan:Connect(
+    function(input, gameProcessed)
+
+        if gameProcessed then
+            return
+        end
+
+        if not State.AutoChop then
+            return
+        end
+
+        local validInput =
+            input.UserInputType
+                == Enum.UserInputType.MouseButton1
+            or
+            input.UserInputType
+                == Enum.UserInputType.Touch
+
+        if not validInput then
+            return
+        end
+
+        local char =
+            getCharacter()
+
+        local hrp =
+            getHRP()
+
+        if not char or not hrp then
+            return
+        end
+
+        local tool =
+            char:FindFirstChildOfClass("Tool")
+
+        if not tool
+            or tool.Name ~= "Axe"
+        then
+            return
+        end
+
+        local camera =
+            Workspace.CurrentCamera
+
+        if not camera then
+            return
+        end
+
+        local position
+
+        if input.UserInputType
+            == Enum.UserInputType.Touch
+        then
+
+            position = input.Position
+
+        else
+
+            position =
+                UserInputService:GetMouseLocation()
+
+        end
+
+        local ray =
+            camera:ViewportPointToRay(
+                position.X,
+                position.Y
+            )
+
+        local params =
+            RaycastParams.new()
+
+        params.FilterType =
+            Enum.RaycastFilterType.Exclude
+
+        params.FilterDescendantsInstances = {
+            char
+        }
+
+        local result =
+            Workspace:Raycast(
+                ray.Origin,
+                ray.Direction * 150,
+                params
+            )
+
+        local tree =
+            getTreeFromRaycast(result)
+
+        if not tree then
+            return
+        end
+
+        local hitPart =
+            result.Instance
+
+        if hitPart
+            and (
+                hrp.Position
+                - hitPart.Position
+            ).Magnitude <= ChopRange
+        then
+
+            instantChop(tree)
+
+            Notify(
+                "秒砍树",
+                "已发送砍树请求",
+                1
+            )
+
+        end
+
+    end
+)
+
+-- ==========================================================
+-- 秒割小麦
+-- ==========================================================
+
+GatherTab:AddToggle(
+    "开启秒割小麦",
+    false,
+    function(value)
+
+        State.AutoWheat = value
+
+        if not value then
+
+            pcall(function()
+
+                for _, prompt in ipairs(
+                    ProximityPromptService:GetPrompts()
+                ) do
+
+                    if prompt.Name
+                        == "HarvestWheatPrompt"
+                    then
+
+                        prompt.HoldDuration = 1
+
+                    end
+
+                end
+
+            end)
+
+        end
+
+        Notify(
+            "秒割小麦",
+            value
+            and "手持镰刀即可瞬间收割"
+            or "已关闭",
+            2
+        )
+
+    end
+)
 
 local function hasSickle()
-    local char = localPlayer.Character
-    if not char then return false end
-    for _, obj in ipairs(char:GetChildren()) do
-        if obj:IsA("Tool") and obj.Name == "Sickle" then
+
+    local char =
+        getCharacter()
+
+    if not char then
+        return false
+    end
+
+    for _, obj in ipairs(
+        char:GetChildren()
+    ) do
+
+        if obj:IsA("Tool")
+            and obj.Name == "Sickle"
+        then
+
             return true
+
         end
+
     end
+
     return false
+
 end
 
-local function setInstantHarvest(duration)
-    for _, prompt in ipairs(ProximityPromptService:GetPrompts()) do
-        if prompt.Name == "HarvestWheatPrompt" then
-            local model = prompt:FindFirstAncestorOfClass("Model")
-            if model and model.Name == "Wheat" then
-                prompt.HoldDuration = duration
+local function updateWheatPrompts()
+
+    if not State.AutoWheat then
+        return
+    end
+
+    if not hasSickle() then
+        return
+    end
+
+    pcall(function()
+
+        for _, prompt in ipairs(
+            ProximityPromptService:GetPrompts()
+        ) do
+
+            if prompt.Name
+                == "HarvestWheatPrompt"
+            then
+
+                local model =
+                    prompt:FindFirstAncestorOfClass(
+                        "Model"
+                    )
+
+                if model
+                    and model.Name == "Wheat"
+                then
+
+                    prompt.HoldDuration = 0
+
+                end
+
             end
+
         end
-    end
+
+    end)
+
 end
 
-GatherTab:AddToggle('开启秒割小麦', false, function(state)
-    autoHarvestWheat = state
-    if not state then
-        setInstantHarvest(1)
-    end
-    zhiUI:Notify("秒割小麦", state and "手持镰刀靠近小麦按 E 即可瞬间收割" or "已关闭秒割小麦", 2)
-end)
+ProximityPromptService.PromptShown:Connect(
+    function(prompt)
 
-ProximityPromptService.PromptShown:Connect(function(prompt)
-    if autoHarvestWheat and prompt.Name == "HarvestWheatPrompt" then
-        local model = prompt:FindFirstAncestorOfClass("Model")
-        if model and model.Name == "Wheat" and hasSickle() then
-            prompt.HoldDuration = 0
+        if not State.AutoWheat then
+            return
         end
+
+        if prompt.Name
+            ~= "HarvestWheatPrompt"
+        then
+            return
+        end
+
+        if not hasSickle() then
+            return
+        end
+
+        local model =
+            prompt:FindFirstAncestorOfClass(
+                "Model"
+            )
+
+        if model
+            and model.Name == "Wheat"
+        then
+
+            prompt.HoldDuration = 0
+
+        end
+
     end
-end)
+)
 
 task.spawn(function()
-    while true do
-        task.wait(0.5)
-        if autoHarvestWheat and hasSickle() then
-            setInstantHarvest(0)
-        end
+
+    while task.wait(0.5) do
+        updateWheatPrompts()
     end
+
 end)
 
--- 搬木头限制叠加/动画处理
-if CarryAnim then
-    local sharedAnim = Instance.new("Animation")
-    sharedAnim.AnimationId = "rbxassetid://78109862453858"
+-- ==========================================================
+-- 搬木动画
+-- ==========================================================
 
-    CarryAnim.OnClientEvent:Connect(function(hasLog)
-        local character = localPlayer.Character
-        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-        if not humanoid then return end
-        
-        local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
-        
-        if animator and hasLog then
-            pcall(function()
-                local track = animator:LoadAnimation(sharedAnim)
-                track.Priority = Enum.AnimationPriority.Movement
-                track.Looped = true
-                track:Play()
-            end)
-        end
+if CarryAnim then
+
+    pcall(function()
+
+        local Animation =
+            Instance.new("Animation")
+
+        Animation.AnimationId =
+            "rbxassetid://78109862453858"
+
+        CarryAnim.OnClientEvent:Connect(
+            function(hasLog)
+
+                if not hasLog then
+                    return
+                end
+
+                local humanoid =
+                    getHumanoid()
+
+                if not humanoid then
+                    return
+                end
+
+                local animator =
+                    humanoid:FindFirstChildOfClass(
+                        "Animator"
+                    )
+
+                if not animator then
+
+                    animator =
+                        Instance.new(
+                            "Animator"
+                        )
+
+                    animator.Parent =
+                        humanoid
+
+                end
+
+                pcall(function()
+
+                    local track =
+                        animator:LoadAnimation(
+                            Animation
+                        )
+
+                    track.Priority =
+                        Enum.AnimationPriority.Movement
+
+                    track.Looped = true
+
+                    track:Play()
+
+                end)
+
+            end
+        )
+
     end)
+
 end
 
--- 树木透视系统
-local espEnabled = false
-local highlightedTrees = {}
+-- ==========================================================
+-- 树木 ESP
+-- ==========================================================
 
-local function addESPToTree(model)
-    if not model or highlightedTrees[model] then return end
+local TreeHighlights = {}
+
+local function addTreeESP(model)
+
+    if not model
+        or TreeHighlights[model]
+    then
+        return
+    end
+
+    if not isTree(model) then
+        return
+    end
+
     pcall(function()
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "TreeESP"
-        highlight.FillColor = Color3.fromRGB(255, 0, 0)
-        highlight.OutlineColor = Color3.fromRGB(255, 255, 0)
+
+        local highlight =
+            Instance.new("Highlight")
+
+        highlight.Name =
+            "Paper1984_TreeESP"
+
+        highlight.FillColor =
+            Color3.fromRGB(
+                255,
+                0,
+                0
+            )
+
+        highlight.OutlineColor =
+            Color3.fromRGB(
+                255,
+                255,
+                0
+            )
+
         highlight.FillTransparency = 0.5
         highlight.OutlineTransparency = 0
+
+        highlight.DepthMode =
+            Enum.HighlightDepthMode.AlwaysOnTop
+
         highlight.Adornee = model
         highlight.Parent = model
-        highlightedTrees[model] = highlight
+
+        TreeHighlights[model] =
+            highlight
+
     end)
+
 end
 
-local function clearAllESP()
-    for model, highlight in pairs(highlightedTrees) do
-        pcall(function() highlight:Destroy() end)
-    end
-    highlightedTrees = {}
-end
+local function clearTreeESP()
 
-GatherTab:AddToggle('树木透视 (ESP)', false, function(state)
-    espEnabled = state
-    if state then
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj:IsA("Model") and (obj.Name == "Tree" or string.find(obj.Name, "Tree") or obj.Name == "LumberTree") then
-                addESPToTree(obj)
+    for model, highlight in pairs(
+        TreeHighlights
+    ) do
+
+        pcall(function()
+
+            if highlight then
+                highlight:Destroy()
             end
-        end
-        zhiUI:Notify("树木透视", "已开启，所有树木已高亮", 2)
-    else
-        clearAllESP()
-        zhiUI:Notify("树木透视", "已关闭", 2)
+
+        end)
+
     end
-end)
+
+    TreeHighlights = {}
+
+end
+
+GatherTab:AddToggle(
+    "树木透视 (ESP)",
+    false,
+    function(value)
+
+        State.TreeESP = value
+
+        if value then
+
+            for _, obj in ipairs(
+                Workspace:GetDescendants()
+            ) do
+
+                if obj:IsA("Model")
+                    and isTree(obj)
+                then
+
+                    addTreeESP(obj)
+
+                end
+
+            end
+
+            Notify(
+                "树木透视",
+                "已开启",
+                2
+            )
+
+        else
+
+            clearTreeESP()
+
+            Notify(
+                "树木透视",
+                "已关闭",
+                2
+            )
+
+        end
+
+    end
+)
 
 RunService.Heartbeat:Connect(function()
-    if not espEnabled then return end
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") and (obj.Name == "Tree" or string.find(obj.Name, "Tree") or obj.Name == "LumberTree") then
-            if not highlightedTrees[obj] then
-                addESPToTree(obj)
-            end
-        end
+
+    if not State.TreeESP then
+        return
     end
+
+    for _, obj in ipairs(
+        Workspace:GetDescendants()
+    ) do
+
+        if obj:IsA("Model")
+            and isTree(obj)
+            and not TreeHighlights[obj]
+        then
+
+            addTreeESP(obj)
+
+        end
+
+    end
+
 end)
 
--- ==========================================
--- 辅助设置 Tab (无限体力 / vfly 飞行 / 防挂机)
--- ==========================================
-SettingTab:AddToggle('无限体力', false, function(state)
-    if state then
-        local success = findAndModifyStamina(true)
-        if success then
-            zhiUI:Notify("无限体力", "已开启，体力消耗归零", 2)
+-- ==========================================================
+-- 无限体力
+-- ==========================================================
+
+SettingTab:AddToggle(
+    "无限体力",
+    false,
+    function(value)
+
+        State.InfiniteStamina =
+            value
+
+        local success =
+            findAndModifyStamina(
+                value
+            )
+
+        if value then
+
+            Notify(
+                "无限体力",
+                success
+                and "体力消耗已关闭"
+                or "没有找到体力数据",
+                2
+            )
+
         else
-            zhiUI:Notify("无限体力", "未找到体力数据，请稍后再试", 3)
+
+            Notify(
+                "无限体力",
+                "已恢复原始体力设置",
+                2
+            )
+
         end
-    else
-        findAndModifyStamina(false)
-        zhiUI:Notify("无限体力", "已关闭，恢复原始消耗", 2)
+
     end
-end)
+)
 
--- ------------------------------------------
--- vfly (飞行系统) 逻辑
--- ------------------------------------------
-local vflyEnabled = false
-local flySpeed = 50
+-- ==========================================================
+-- vFly
+-- ==========================================================
 
-SettingTab:AddToggle('开启 vfly (飞行)', false, function(state)
-    vflyEnabled = state
-    zhiUI:Notify("vfly 飞行", state and "飞行模式已开启（方向键控制）" or "飞行模式已关闭", 2)
-end)
+SettingTab:AddToggle(
+    "开启 vfly (飞行)",
+    false,
+    function(value)
 
-SettingTab:AddSlider('飞行速度', 10, 200, 50, function(val)
-    flySpeed = val
-end)
+        State.VFly = value
 
-RunService.RenderStepped:Connect(function(deltaTime)
-    if not vflyEnabled then return end
+        Notify(
+            "vfly",
+            value
+            and "飞行已开启"
+            or "飞行已关闭",
+            2
+        )
 
-    local character = localPlayer.Character
-    if not character then return end
+    end
+)
 
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    
-    if humanoid and humanoid.SeatPart then
-        local vehicle = humanoid.SeatPart.Parent
-        if vehicle and vehicle:IsA("Model") and vehicle.PrimaryPart then
-            hrp = vehicle.PrimaryPart
-        elseif humanoid.SeatPart:IsA("BasePart") then
-            hrp = humanoid.SeatPart
+SettingTab:AddSlider(
+    "飞行速度",
+    10,
+    200,
+    50,
+    function(value)
+
+        FlySpeed = value
+
+    end
+)
+
+-- ==========================================================
+-- 飞行控制
+-- ==========================================================
+
+local function getFlyDirection(camera)
+
+    local direction =
+        Vector3.zero
+
+    if UserInputService:IsKeyDown(
+        Enum.KeyCode.W
+    ) then
+
+        direction +=
+            camera.CFrame.LookVector
+
+    end
+
+    if UserInputService:IsKeyDown(
+        Enum.KeyCode.S
+    ) then
+
+        direction -=
+            camera.CFrame.LookVector
+
+    end
+
+    if UserInputService:IsKeyDown(
+        Enum.KeyCode.A
+    ) then
+
+        direction -=
+            camera.CFrame.RightVector
+
+    end
+
+    if UserInputService:IsKeyDown(
+        Enum.KeyCode.D
+    ) then
+
+        direction +=
+            camera.CFrame.RightVector
+
+    end
+
+    if UserInputService:IsKeyDown(
+        Enum.KeyCode.Space
+    ) then
+
+        direction +=
+            Vector3.new(
+                0,
+                1,
+                0
+            )
+
+    end
+
+    if UserInputService:IsKeyDown(
+        Enum.KeyCode.LeftShift
+    ) then
+
+        direction -=
+            Vector3.new(
+                0,
+                1,
+                0
+            )
+
+    end
+
+    return direction
+
+end
+
+RunService.RenderStepped:Connect(
+    function(delta)
+
+        if not State.VFly then
+            return
         end
-    end
 
-    if not hrp then return end
+        local char =
+            getCharacter()
 
-    local camera = Workspace.CurrentCamera
-    if not camera then return end
+        if not char then
+            return
+        end
 
-    local moveDir = Vector3.zero
-    local lookCF = camera.CFrame
+        local humanoid =
+            char:FindFirstChildOfClass(
+                "Humanoid"
+            )
 
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-        moveDir = moveDir + lookCF.LookVector
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-        moveDir = moveDir - lookCF.LookVector
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-        moveDir = moveDir - lookCF.RightVector
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-        moveDir = moveDir + lookCF.RightVector
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-        moveDir = moveDir + Vector3.new(0, 1, 0)
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-        moveDir = moveDir - Vector3.new(0, 1, 0)
-    end
+        local hrp =
+            char:FindFirstChild(
+                "HumanoidRootPart"
+            )
 
-    pcall(function()
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-    end)
+        if not hrp then
+            return
+        end
 
-    if moveDir.Magnitude > 0 then
-        hrp.CFrame = hrp.CFrame + (moveDir.Unit * flySpeed * deltaTime)
+        -- 坐车时尝试控制载具
+
+        if humanoid
+            and humanoid.SeatPart
+        then
+
+            local seat =
+                humanoid.SeatPart
+
+            local vehicle =
+                seat.Parent
+
+            if vehicle
+                and vehicle:IsA("Model")
+                and vehicle.PrimaryPart
+            then
+
+                hrp =
+                    vehicle.PrimaryPart
+
+            elseif seat:IsA("BasePart") then
+
+                hrp = seat
+
+            end
+
+        end
+
+        local camera =
+            Workspace.CurrentCamera
+
+        if not camera then
+            return
+        end
+
+        local move =
+            getFlyDirection(camera)
+
+        pcall(function()
+
+            hrp.AssemblyLinearVelocity =
+                Vector3.zero
+
+            hrp.AssemblyAngularVelocity =
+                Vector3.zero
+
+        end)
+
+        if move.Magnitude > 0 then
+
+            local offset =
+                move.Unit
+                * FlySpeed
+                * delta
+
+            pcall(function()
+
+                hrp.CFrame =
+                    hrp.CFrame
+                    + offset
+
+            end)
+
+        end
+
     end
-end)
+)
 
--- ------------------------------------------
--- 防挂机系统
--- ------------------------------------------
-local antiAFKRunning = false
-SettingTab:AddToggle('防挂机踢出 (Anti AFK)', false, function(state)
-    antiAFKRunning = state
-    if state then
-        zhiUI:Notify("防挂机踢出", "长时间未操作防踢已激活", 3)
+-- ==========================================================
+-- 防挂机
+-- ==========================================================
+
+SettingTab:AddToggle(
+    "防挂机踢出 (Anti AFK)",
+    false,
+    function(value)
+
+        State.AntiAFK = value
+
+        Notify(
+            "防挂机",
+            value
+            and "Anti AFK 已开启"
+            or "Anti AFK 已关闭",
+            2
+        )
+
     end
-end)
+)
 
-localPlayer.Idled:Connect(function()
-    if antiAFKRunning then
-        VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-        task.wait(0.1)
-        VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+LocalPlayer.Idled:Connect(
+    function()
+
+        if not State.AntiAFK then
+            return
+        end
+
+        pcall(function()
+
+            local camera =
+                Workspace.CurrentCamera
+
+            if not camera then
+                return
+            end
+
+            VirtualUser:Button2Down(
+                Vector2.new(0, 0),
+                camera.CFrame
+            )
+
+            task.wait(0.1)
+
+            VirtualUser:Button2Up(
+                Vector2.new(0, 0),
+                camera.CFrame
+            )
+
+        end)
+
     end
-end)
+)
 
-zhiUI:Notify("纸:乌托邦1984", "整合脚本载入成功！全功能已就绪。", 4)
+-- ==========================================================
+-- UI 初始化完成
+-- ==========================================================
+
+Notify(
+    "纸:乌托邦1984",
+    "脚本加载完成",
+    3
+)
+
+print(
+    "[纸:乌托邦1984] 独立修正版加载完成"
+)
