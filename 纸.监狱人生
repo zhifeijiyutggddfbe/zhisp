@@ -1,0 +1,807 @@
+-- ==========================================================
+-- Prison Life Custom Glassmorphism Hub (V10 - Fixed Tracers & Expanded Effects)
+-- ==========================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+
+local LocalPlayer = Players.LocalPlayer
+local GunRemotes = ReplicatedStorage:WaitForChild("GunRemotes")
+local ShootEvent = GunRemotes:WaitForChild("ShootEvent")
+local ReloadRemote = GunRemotes:WaitForChild("FuncReload")
+local MeleeEvent = ReplicatedStorage:FindFirstChild("meleeEvent")
+
+-- 全局设置
+local settings = {
+    silentAim = false,
+    wallCheck = true,
+    visualTracers = false,
+    tracerColorName = "Blue",  -- 默认颜色
+    tracerShape = "Beam",     -- 默认特效形状
+    fastPunch = false,
+    rainbowItems = false,
+    skyJump = false,
+    speedHack = false,
+    noclip = false,
+    spinBot = false,
+    autoReload = true,
+    antiarrest = false,
+    antitase = false,
+}
+
+-- 扩展激光颜色映射表
+local LaserColors = {
+    ["Blue"]      = Color3.fromRGB(0, 170, 255),
+    ["Red"]       = Color3.fromRGB(255, 50, 50),
+    ["Green"]     = Color3.fromRGB(50, 255, 100),
+    ["Purple"]    = Color3.fromRGB(180, 50, 255),
+    ["Gold"]      = Color3.fromRGB(255, 200, 0),
+    ["Cyan"]      = Color3.fromRGB(0, 255, 230),
+    ["Neon Pink"] = Color3.fromRGB(255, 20, 147),
+    ["Lime"]      = Color3.fromRGB(124, 252, 0),
+    ["White"]     = Color3.fromRGB(255, 255, 255),
+    ["Rainbow"]   = Color3.fromRGB(255, 255, 255)
+}
+
+-- 队伍白名单多选
+local ProtectedTeams = {
+    ["Inmates"] = false,
+    ["Guards"] = false,
+    ["Criminals"] = false
+}
+
+local isReloading = false
+local lastPos = nil
+local lastHitLog = {}
+
+-- ==========================================================
+-- 1. 构建毛玻璃风格 UI 界面
+-- ==========================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CustomGlassHubV10"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 240, 0, 480)
+MainFrame.Position = UDim2.new(0.8, 0, 0.2, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+MainFrame.BackgroundTransparency = 0.35
+MainFrame.ClipsDescendants = false
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 14)
+
+local MainStroke = Instance.new("UIStroke", MainFrame)
+MainStroke.Color = Color3.fromRGB(255, 255, 255)
+MainStroke.Transparency = 0.7
+MainStroke.Thickness = 1.2
+
+-- 标题栏
+local Header = Instance.new("Frame", MainFrame)
+Header.Name = "Header"
+Header.Size = UDim2.new(1, 0, 0, 40)
+Header.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+Header.BackgroundTransparency = 0.4
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 14)
+
+local TitleText = Instance.new("TextLabel", Header)
+TitleText.Size = UDim2.new(1, -50, 1, 0)
+TitleText.Position = UDim2.new(0, 15, 0, 0)
+TitleText.BackgroundTransparency = 1
+TitleText.Text = "PRISON LIFE • HUB"
+TitleText.TextColor3 = Color3.fromRGB(240, 240, 255)
+TitleText.Font = Enum.Font.GothamBold
+TitleText.TextSize = 13
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
+
+-- 折叠按钮
+local FoldBtn = Instance.new("TextButton", Header)
+FoldBtn.Size = UDim2.new(0, 26, 0, 26)
+FoldBtn.Position = UDim2.new(1, -33, 0.5, -13)
+FoldBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+FoldBtn.BackgroundTransparency = 0.85
+FoldBtn.Text = "−"
+FoldBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FoldBtn.Font = Enum.Font.GothamBold
+FoldBtn.TextSize = 16
+Instance.new("UICorner", FoldBtn).CornerRadius = UDim.new(0, 6)
+
+-- 滚动容器
+local ScrollContainer = Instance.new("ScrollingFrame", MainFrame)
+ScrollContainer.Name = "ScrollContainer"
+ScrollContainer.Size = UDim2.new(1, 0, 1, -40)
+ScrollContainer.Position = UDim2.new(0, 0, 0, 40)
+ScrollContainer.BackgroundTransparency = 1
+ScrollContainer.ScrollBarThickness = 2
+ScrollContainer.ScrollBarImageColor3 = Color3.fromRGB(0, 180, 255)
+ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, 980)
+
+local UIList = Instance.new("UIListLayout", ScrollContainer)
+UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+UIList.Padding = UDim.new(0, 6)
+
+local UIPadding = Instance.new("UIPadding", ScrollContainer)
+UIPadding.PaddingTop = UDim.new(0, 8)
+
+local isFolded = false
+FoldBtn.MouseButton1Click:Connect(function()
+    isFolded = not isFolded
+    FoldBtn.Text = isFolded and "+" or "−"
+    ScrollContainer.Visible = not isFolded
+    local targetSize = isFolded and UDim2.new(0, 240, 0, 40) or UDim2.new(0, 240, 0, 480)
+    TweenService:Create(MainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Size = targetSize
+    }):Play()
+end)
+
+-- ==========================================================
+-- 2. UI 开关与扩展下拉框
+-- ==========================================================
+local function createGlassToggle(text, settingKey)
+    local btn = Instance.new("TextButton", ScrollContainer)
+    btn.Size = UDim2.new(0.9, 0, 0, 32)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+    btn.BackgroundTransparency = 0.5
+    btn.Text = ""
+    btn.AutoButtonColor = false
+
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    local stroke = Instance.new("UIStroke", btn)
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Transparency = 0.85
+
+    local label = Instance.new("TextLabel", btn)
+    label.Size = UDim2.new(0.7, 0, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(200, 205, 220)
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local statusDot = Instance.new("Frame", btn)
+    statusDot.Size = UDim2.new(0, 10, 0, 10)
+    statusDot.Position = UDim2.new(1, -20, 0.5, -5)
+    statusDot.BackgroundColor3 = settings[settingKey] and Color3.fromRGB(0, 230, 130) or Color3.fromRGB(230, 60, 60)
+    Instance.new("UICorner", statusDot).CornerRadius = UDim.new(1, 0)
+
+    btn.MouseButton1Click:Connect(function()
+        settings[settingKey] = not settings[settingKey]
+        local active = settings[settingKey]
+        TweenService:Create(statusDot, TweenInfo.new(0.2), {
+            BackgroundColor3 = active and Color3.fromRGB(0, 230, 130) or Color3.fromRGB(230, 60, 60)
+        }):Play()
+        TweenService:Create(btn, TweenInfo.new(0.2), {
+            BackgroundTransparency = active and 0.25 or 0.5
+        }):Play()
+    end)
+end
+
+-- 颜色下拉框 (扩展 10 种颜色)
+local function createColorDropdown()
+    local container = Instance.new("Frame", ScrollContainer)
+    container.Size = UDim2.new(0.9, 0, 0, 32)
+    container.BackgroundColor3 = Color3.fromRGB(30, 35, 50)
+    container.BackgroundTransparency = 0.5
+    container.ClipsDescendants = true
+    container.ZIndex = 8
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
+    
+    local stroke = Instance.new("UIStroke", container)
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Transparency = 0.85
+
+    local mainBtn = Instance.new("TextButton", container)
+    mainBtn.Size = UDim2.new(1, 0, 0, 32)
+    mainBtn.BackgroundTransparency = 1
+    mainBtn.Text = "轨道颜色: Blue ▾"
+    mainBtn.TextColor3 = Color3.fromRGB(200, 205, 220)
+    mainBtn.Font = Enum.Font.GothamMedium
+    mainBtn.TextSize = 12
+    mainBtn.ZIndex = 9
+
+    local itemsFrame = Instance.new("Frame", container)
+    itemsFrame.Size = UDim2.new(1, 0, 0, 240)
+    itemsFrame.Position = UDim2.new(0, 0, 0, 34)
+    itemsFrame.BackgroundTransparency = 1
+    itemsFrame.ZIndex = 9
+
+    local itemList = Instance.new("UIListLayout", itemsFrame)
+    itemList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    itemList.Padding = UDim.new(0, 2)
+
+    local isOpen = false
+    local colorList = {"Blue", "Red", "Green", "Purple", "Gold", "Cyan", "Neon Pink", "Lime", "White", "Rainbow"}
+
+    for _, cName in ipairs(colorList) do
+        local subBtn = Instance.new("TextButton", itemsFrame)
+        subBtn.Size = UDim2.new(0.88, 0, 0, 20)
+        subBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 75)
+        subBtn.BackgroundTransparency = 0.4
+        subBtn.Text = cName
+        subBtn.TextColor3 = LaserColors[cName] or Color3.fromRGB(255, 255, 255)
+        subBtn.Font = Enum.Font.GothamBold
+        subBtn.TextSize = 11
+        subBtn.ZIndex = 10
+        Instance.new("UICorner", subBtn).CornerRadius = UDim.new(0, 5)
+
+        subBtn.MouseButton1Click:Connect(function()
+            settings.tracerColorName = cName
+            mainBtn.Text = "轨道颜色: " .. cName .. " ▾"
+            isOpen = false
+            TweenService:Create(container, TweenInfo.new(0.2), {Size = UDim2.new(0.9, 0, 0, 32)}):Play()
+        end)
+    end
+
+    mainBtn.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        mainBtn.Text = "轨道颜色: " .. settings.tracerColorName .. (isOpen and " ▴" or " ▾")
+        local targetHeight = isOpen and 260 or 32
+        TweenService:Create(container, TweenInfo.new(0.2), {Size = UDim2.new(0.9, 0, 0, targetHeight)}):Play()
+    end)
+end
+
+-- 形状下拉框 (扩展 8 种形状)
+local function createShapeDropdown()
+    local container = Instance.new("Frame", ScrollContainer)
+    container.Size = UDim2.new(0.9, 0, 0, 32)
+    container.BackgroundColor3 = Color3.fromRGB(30, 35, 50)
+    container.BackgroundTransparency = 0.5
+    container.ClipsDescendants = true
+    container.ZIndex = 5
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
+    
+    local stroke = Instance.new("UIStroke", container)
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Transparency = 0.85
+
+    local mainBtn = Instance.new("TextButton", container)
+    mainBtn.Size = UDim2.new(1, 0, 0, 32)
+    mainBtn.BackgroundTransparency = 1
+    mainBtn.Text = "轨道形状: Beam ▾"
+    mainBtn.TextColor3 = Color3.fromRGB(0, 220, 255)
+    mainBtn.Font = Enum.Font.GothamMedium
+    mainBtn.TextSize = 12
+    mainBtn.ZIndex = 6
+
+    local itemsFrame = Instance.new("Frame", container)
+    itemsFrame.Size = UDim2.new(1, 0, 0, 210)
+    itemsFrame.Position = UDim2.new(0, 0, 0, 34)
+    itemsFrame.BackgroundTransparency = 1
+    itemsFrame.ZIndex = 6
+
+    local itemList = Instance.new("UIListLayout", itemsFrame)
+    itemList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    itemList.Padding = UDim.new(0, 2)
+
+    local isOpen = false
+    local shapes = {
+        {name = "Line", label = "Line (细线激光)"},
+        {name = "Beam", label = "Beam (动态流光)"},
+        {name = "Cylinder", label = "Cylinder (高亮光柱)"},
+        {name = "Rope", label = "Rope (螺旋光绳)"},
+        {name = "Particles", label = "Particles (火花粒子)"},
+        {name = "Neon Box", label = "Neon Box (发光方块)"},
+        {name = "Lightning", label = "Lightning (雷击闪电)"},
+        {name = "Pulse Rings", label = "Pulse Rings (脉冲光环)"}
+    }
+
+    for _, sData in ipairs(shapes) do
+        local subBtn = Instance.new("TextButton", itemsFrame)
+        subBtn.Size = UDim2.new(0.88, 0, 0, 22)
+        subBtn.BackgroundColor3 = Color3.fromRGB(45, 60, 80)
+        subBtn.BackgroundTransparency = 0.4
+        subBtn.Text = sData.label
+        subBtn.TextColor3 = Color3.fromRGB(220, 230, 255)
+        subBtn.Font = Enum.Font.GothamMedium
+        subBtn.TextSize = 10
+        subBtn.ZIndex = 7
+        Instance.new("UICorner", subBtn).CornerRadius = UDim.new(0, 5)
+
+        subBtn.MouseButton1Click:Connect(function()
+            settings.tracerShape = sData.name
+            mainBtn.Text = "轨道形状: " .. sData.name .. " ▾"
+            isOpen = false
+            TweenService:Create(container, TweenInfo.new(0.2), {Size = UDim2.new(0.9, 0, 0, 32)}):Play()
+        end)
+    end
+
+    mainBtn.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        mainBtn.Text = "轨道形状: " .. settings.tracerShape .. (isOpen and " ▴" or " ▾")
+        local targetHeight = isOpen and 245 or 32
+        TweenService:Create(container, TweenInfo.new(0.2), {Size = UDim2.new(0.9, 0, 0, targetHeight)}):Play()
+    end)
+end
+
+-- 队伍白名单多选下拉框
+local function createTeamDropdown()
+    local container = Instance.new("Frame", ScrollContainer)
+    container.Size = UDim2.new(0.9, 0, 0, 32)
+    container.BackgroundColor3 = Color3.fromRGB(30, 35, 50)
+    container.BackgroundTransparency = 0.5
+    container.ClipsDescendants = true
+    container.ZIndex = 3
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
+    
+    local stroke = Instance.new("UIStroke", container)
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Transparency = 0.85
+
+    local mainBtn = Instance.new("TextButton", container)
+    mainBtn.Size = UDim2.new(1, 0, 0, 32)
+    mainBtn.BackgroundTransparency = 1
+    mainBtn.Text = "队伍白名单 (0) ▾"
+    mainBtn.TextColor3 = Color3.fromRGB(200, 205, 220)
+    mainBtn.Font = Enum.Font.GothamMedium
+    mainBtn.TextSize = 12
+    mainBtn.ZIndex = 4
+
+    local itemsFrame = Instance.new("Frame", container)
+    itemsFrame.Size = UDim2.new(1, 0, 0, 95)
+    itemsFrame.Position = UDim2.new(0, 0, 0, 34)
+    itemsFrame.BackgroundTransparency = 1
+    itemsFrame.ZIndex = 4
+
+    local itemList = Instance.new("UIListLayout", itemsFrame)
+    itemList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    itemList.Padding = UDim.new(0, 3)
+
+    local isOpen = false
+    local teams = {"Inmates", "Guards", "Criminals"}
+
+    local function updateText()
+        local count = 0
+        for _, v in pairs(ProtectedTeams) do
+            if v then count = count + 1 end
+        end
+        mainBtn.Text = "队伍白名单 (" .. count .. ") " .. (isOpen and "▴" or "▾")
+    end
+
+    for _, teamName in ipairs(teams) do
+        local subBtn = Instance.new("TextButton", itemsFrame)
+        subBtn.Size = UDim2.new(0.85, 0, 0, 24)
+        subBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 75)
+        subBtn.BackgroundTransparency = 0.6
+        subBtn.Text = teamName .. " [✕]"
+        subBtn.TextColor3 = Color3.fromRGB(180, 180, 195)
+        subBtn.Font = Enum.Font.Gotham
+        subBtn.TextSize = 11
+        subBtn.ZIndex = 5
+        Instance.new("UICorner", subBtn).CornerRadius = UDim.new(0, 6)
+
+        subBtn.MouseButton1Click:Connect(function()
+            ProtectedTeams[teamName] = not ProtectedTeams[teamName]
+            local isSel = ProtectedTeams[teamName]
+            subBtn.Text = teamName .. (isSel and " [✓]" or " [✕]")
+            subBtn.TextColor3 = isSel and Color3.fromRGB(0, 230, 130) or Color3.fromRGB(180, 180, 195)
+            subBtn.BackgroundColor3 = isSel and Color3.fromRGB(20, 80, 50) or Color3.fromRGB(50, 55, 75)
+            updateText()
+        end)
+    end
+
+    mainBtn.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        updateText()
+        local targetSize = isOpen and UDim2.new(0.9, 0, 0, 130) or UDim2.new(0.9, 0, 0, 32)
+        TweenService:Create(container, TweenInfo.new(0.2), {Size = targetSize}):Play()
+    end)
+end
+
+-- 渲染控制菜单
+createGlassToggle("静默自瞄 (Silent Aim)", "silentAim")
+createGlassToggle("墙壁检测 (Wall Check)", "wallCheck")
+createGlassToggle("视觉激光 (Tracers)", "visualTracers")
+createColorDropdown()
+createShapeDropdown()
+createGlassToggle("秒杀拳击 (Fast Punch)", "fastPunch")
+createGlassToggle("天空跳跃 (Sky Jump)", "skyJump")
+createGlassToggle("速度加速 (Speed Hack)", "speedHack")
+createGlassToggle("穿墙模式 (Noclip)", "noclip")
+createGlassToggle("陀螺自转 (Spinbot)", "spinBot")
+createGlassToggle("彩色物品 (Rainbow)", "rainbowItems")
+createGlassToggle("自动换弹 (Auto Reload)", "autoReload")
+createGlassToggle("反手铐 (Anti Arrest)", "antiarrest")
+createGlassToggle("反电击 (Anti Tase)", "antitase")
+createTeamDropdown()
+
+-- 武器获取模块
+local function fetchWeapon(gunName)
+    local giverFolder = workspace:FindFirstChild("Prison_ITEMS") and workspace.Prison_ITEMS:FindFirstChild("giver")
+    if not giverFolder then return end
+
+    local gunModel = giverFolder:FindFirstChild(gunName)
+    if not gunModel then return end
+
+    local targetPart = gunModel:FindFirstChildWhichIsA("BasePart", true)
+    if not targetPart then return end
+
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local savedPos = hrp.CFrame
+        hrp.CFrame = targetPart.CFrame
+        task.wait(0.15)
+
+        local interactRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("InteractWithItem")
+        if interactRemote then
+            pcall(function()
+                interactRemote:InvokeServer(targetPart)
+            end)
+        end
+        task.wait(0.1)
+        hrp.CFrame = savedPos
+    end
+end
+
+local function createActionButton(text, color, onClick)
+    local btn = Instance.new("TextButton", ScrollContainer)
+    btn.Size = UDim2.new(0.9, 0, 0, 30)
+    btn.BackgroundColor3 = color
+    btn.BackgroundTransparency = 0.5
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamMedium
+    btn.TextSize = 12
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+
+    local stroke = Instance.new("UIStroke", btn)
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Transparency = 0.85
+
+    btn.MouseButton1Click:Connect(onClick)
+end
+
+createActionButton("一键获取 AK-47", Color3.fromRGB(200, 80, 0), function() fetchWeapon("AK-47") end)
+createActionButton("一键获取 MP5", Color3.fromRGB(150, 0, 200), function() fetchWeapon("MP5") end)
+createActionButton("获取钥匙卡", Color3.fromRGB(0, 130, 220), function()
+    local source = ReplicatedStorage:FindFirstChild("Key card", true)
+    if source then source:Clone().Parent = LocalPlayer.Backpack end
+end)
+
+-- ==========================================================
+-- 3. 悬浮面板：真实子弹显示 & 命中日志
+-- ==========================================================
+local LogFrame = Instance.new("Frame", ScreenGui)
+LogFrame.Size = UDim2.new(0, 280, 0, 180)
+LogFrame.Position = UDim2.new(0, 15, 0, 15)
+LogFrame.BackgroundTransparency = 1
+
+local LogList = Instance.new("UIListLayout", LogFrame)
+LogList.Padding = UDim.new(0, 4)
+
+local function addHitLog(attackerName, targetName, toolName)
+    local item = Instance.new("Frame", LogFrame)
+    item.Size = UDim2.new(1, 0, 0, 26)
+    item.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+    item.BackgroundTransparency = 0.35
+    Instance.new("UICorner", item).CornerRadius = UDim.new(0, 6)
+    
+    local stroke = Instance.new("UIStroke", item)
+    stroke.Color = Color3.fromRGB(0, 180, 255)
+    stroke.Transparency = 0.7
+
+    local text = Instance.new("TextLabel", item)
+    text.Size = UDim2.new(1, -10, 1, 0)
+    text.Position = UDim2.new(0, 10, 0, 0)
+    text.BackgroundTransparency = 1
+    text.Text = string.format("🎯 [%s] 攻击 -> %s (%s)", attackerName, targetName, toolName)
+    text.TextColor3 = Color3.fromRGB(0, 230, 255)
+    text.Font = Enum.Font.GothamBold
+    text.TextSize = 10
+    text.TextXAlignment = Enum.TextXAlignment.Left
+
+    task.delay(2.5, function()
+        TweenService:Create(item, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(text, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
+        TweenService:Create(stroke, TweenInfo.new(0.5), {Transparency = 1}):Play()
+        task.wait(0.5)
+        item:Destroy()
+    end)
+end
+
+local AmmoBox = Instance.new("Frame", ScreenGui)
+AmmoBox.Size = UDim2.new(0, 130, 0, 36)
+AmmoBox.Position = UDim2.new(0.85, 0, 0.88, 0)
+AmmoBox.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+AmmoBox.BackgroundTransparency = 0.35
+Instance.new("UICorner", AmmoBox).CornerRadius = UDim.new(0, 10)
+
+local AmmoStroke = Instance.new("UIStroke", AmmoBox)
+AmmoStroke.Color = Color3.fromRGB(255, 255, 255)
+AmmoStroke.Transparency = 0.8
+
+local AmmoText = Instance.new("TextLabel", AmmoBox)
+AmmoText.Size = UDim2.new(1, 0, 1, 0)
+AmmoText.BackgroundTransparency = 1
+AmmoText.Text = "AMMO: --"
+AmmoText.TextColor3 = Color3.fromRGB(0, 200, 255)
+AmmoText.Font = Enum.Font.GothamBold
+AmmoText.TextSize = 14
+
+-- ==========================================================
+-- 4. 修复且升级版的弹道生成引擎 (Complete Fixed Tracer Engine)
+-- ==========================================================
+local function spawnCustomTracer(startPos, endPos, color)
+    local shape = settings.tracerShape
+    local dist = (startPos - endPos).Magnitude
+    if dist <= 0.1 then return end
+
+    if shape == "Beam" then
+        -- 流光 Beam 效果
+        local p0 = Instance.new("Part")
+        p0.Size = Vector3.new(0.05, 0.05, 0.05)
+        p0.Position = startPos
+        p0.Anchored = true
+        p0.Transparency = 1
+        p0.CanCollide = false
+        p0.Parent = workspace
+
+        local p1 = Instance.new("Part")
+        p1.Size = Vector3.new(0.05, 0.05, 0.05)
+        p1.Position = endPos
+        p1.Anchored = true
+        p1.Transparency = 1
+        p1.CanCollide = false
+        p1.Parent = workspace
+
+        local a0 = Instance.new("Attachment", p0)
+        local a1 = Instance.new("Attachment", p1)
+
+        local beam = Instance.new("Beam", p0)
+        beam.Attachment0 = a0
+        beam.Attachment1 = a1
+        beam.Color = ColorSequence.new(color)
+        beam.Width0 = 0.4
+        beam.Width1 = 0.05
+        beam.Texture = "rbxassetid://446111271"
+        beam.TextureMode = Enum.TextureMode.Wrap
+        beam.TextureSpeed = 4
+        beam.FaceCamera = true
+
+        Debris:AddItem(p0, 0.12)
+        Debris:AddItem(p1, 0.12)
+
+    elseif shape == "Cylinder" then
+        -- 修正朝向的高亮圆柱体
+        local cyl = Instance.new("Part")
+        cyl.Anchored = true
+        cyl.CanCollide = false
+        cyl.Material = Enum.Material.Neon
+        cyl.Color = color
+        cyl.Size = Vector3.new(0.25, dist, 0.25)
+        -- 通过 CFrame 修正 Cylinder 默认垂直延伸的轴向
+        cyl.CFrame = CFrame.new(startPos, endPos) * CFrame.new(0, 0, -dist / 2) * CFrame.Angles(math.rad(90), 0, 0)
+        cyl.Parent = workspace
+        Debris:AddItem(cyl, 0.1)
+
+    elseif shape == "Rope" then
+        -- 螺旋绳索
+        local ropePart = Instance.new("Part")
+        ropePart.Anchored = true
+        ropePart.CanCollide = false
+        ropePart.Transparency = 1
+        ropePart.Position = startPos
+        ropePart.Parent = workspace
+        
+        local a0 = Instance.new("Attachment", ropePart)
+        local a1 = Instance.new("Attachment", ropePart)
+        a1.WorldPosition = endPos
+
+        local rope = Instance.new("RopeConstraint", ropePart)
+        rope.Attachment0 = a0
+        rope.Attachment1 = a1
+        rope.Length = dist
+        rope.Color = BrickColor.new(color)
+        rope.Visible = true
+        rope.Thickness = 0.15
+        Debris:AddItem(ropePart, 0.1)
+
+    elseif shape == "Particles" then
+        -- 火花/星光粒子链
+        local emitterPart = Instance.new("Part")
+        emitterPart.Anchored = true
+        emitterPart.CanCollide = false
+        emitterPart.Transparency = 1
+        emitterPart.Size = Vector3.new(0.05, 0.05, dist)
+        emitterPart.CFrame = CFrame.new(startPos, endPos) * CFrame.new(0, 0, -dist / 2)
+        emitterPart.Parent = workspace
+
+        local pe = Instance.new("ParticleEmitter", emitterPart)
+        pe.Texture = "rbxassetid://258122325"
+        pe.Color = ColorSequence.new(color)
+        pe.Size = NumberSequence.new(0.35, 0)
+        pe.Lifetime = NumberRange.new(0.1, 0.2)
+        pe.Rate = 250
+        pe.Speed = NumberRange.new(3, 6)
+
+        Debris:AddItem(emitterPart, 0.12)
+
+    elseif shape == "Neon Box" then
+        -- [新增] 沿着弹道的连续霓虹方块链
+        local segments = math.clamp(math.floor(dist / 3), 2, 10)
+        for i = 0, segments do
+            local pos = startPos:Lerp(endPos, i / segments)
+            local box = Instance.new("Part")
+            box.Anchored = true
+            box.CanCollide = false
+            box.Material = Enum.Material.Neon
+            box.Color = color
+            box.Size = Vector3.new(0.3, 0.3, 0.3)
+            box.CFrame = CFrame.new(pos) * CFrame.Angles(math.rad(45), math.rad(45), 0)
+            box.Parent = workspace
+            
+            TweenService:Create(box, TweenInfo.new(0.15), {
+                Size = Vector3.new(0, 0, 0),
+                Transparency = 1
+            }):Play()
+            Debris:AddItem(box, 0.15)
+        end
+
+    elseif shape == "Lightning" then
+        -- [新增] 锯齿折线雷击特效
+        local segments = math.clamp(math.floor(dist / 4), 3, 12)
+        local lastPt = startPos
+        for i = 1, segments do
+            local nextPt = (i == segments) and endPos or (startPos:Lerp(endPos, i / segments) + Vector3.new(
+                math.random(-15, 15) / 10,
+                math.random(-15, 15) / 10,
+                math.random(-15, 15) / 10
+            ))
+            local subDist = (lastPt - nextPt).Magnitude
+
+            local seg = Instance.new("Part")
+            seg.Anchored = true
+            seg.CanCollide = false
+            seg.Material = Enum.Material.Neon
+            seg.Color = color
+            seg.Size = Vector3.new(0.1, 0.1, subDist)
+            seg.CFrame = CFrame.new(lastPt, nextPt) * CFrame.new(0, 0, -subDist / 2)
+            seg.Parent = workspace
+            Debris:AddItem(seg, 0.08)
+
+            lastPt = nextPt
+        end
+
+    elseif shape == "Pulse Rings" then
+        -- [新增] 弹道路径上的扩散射频光环
+        local ringCount = math.clamp(math.floor(dist / 5), 2, 8)
+        for i = 1, ringCount do
+            local pos = startPos:Lerp(endPos, i / ringCount)
+            local ring = Instance.new("Part")
+            ring.Anchored = true
+            ring.CanCollide = false
+            ring.Material = Enum.Material.Neon
+            ring.Color = color
+            ring.Shape = Enum.PartType.Cylinder
+            ring.Size = Vector3.new(0.05, 0.4, 0.4)
+            ring.CFrame = CFrame.new(startPos, endPos) * CFrame.new(0, 0, -(i / ringCount) * dist) * CFrame.Angles(0, math.rad(90), 0)
+            ring.Parent = workspace
+
+            TweenService:Create(ring, TweenInfo.new(0.18), {
+                Size = Vector3.new(0.05, 1.8, 1.8),
+                Transparency = 1
+            }):Play()
+            Debris:AddItem(ring, 0.18)
+        end
+
+    else
+        -- 标准 Line (极细激光线)
+        local laser = Instance.new("Part")
+        laser.Anchored = true
+        laser.CanCollide = false
+        laser.Material = Enum.Material.Neon
+        laser.Color = color
+        laser.Size = Vector3.new(0.06, 0.06, dist)
+        laser.CFrame = CFrame.new(startPos, endPos) * CFrame.new(0, 0, -dist / 2)
+        laser.Parent = workspace
+        Debris:AddItem(laser, 0.08)
+    end
+end
+
+-- ==========================================================
+-- 5. 核心运行主循环
+-- ==========================================================
+
+UserInputService.JumpRequest:Connect(function()
+    if settings.skyJump then
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.Velocity = Vector3.new(hrp.Velocity.X, 60, hrp.Velocity.Z)
+        end
+    end
+end)
+
+local function ConnectCharacter(char)
+    local humanoid = char:WaitForChild("Humanoid", 5)
+    local root = char:WaitForChild("HumanoidRootPart", 5)
+    if not humanoid or not root then return end
+    local animator = humanoid:WaitForChild("Animator", 5)
+    if not animator then return end
+
+    animator.AnimationPlayed:Connect(function(des)
+        if settings.antiarrest and des.Animation.AnimationId == "rbxassetid://287112271" then
+            lastPos = root.CFrame
+            humanoid.Health = 0
+        end
+        if settings.antitase and des.Animation.AnimationId == "rbxassetid://279227693" then
+            des:Stop()
+            humanoid.PlatformStand = false
+            task.wait()
+            humanoid.WalkSpeed = 16
+        end
+    end)
+end
+
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    if lastPos then
+        local newRoot = newChar:WaitForChild("HumanoidRootPart", 5)
+        if newRoot then
+            task.wait(0.5) 
+            newRoot.CFrame = lastPos
+            lastPos = nil 
+        end
+    end
+    ConnectCharacter(newChar)
+end)
+if LocalPlayer.Character then ConnectCharacter(LocalPlayer.Character) end
+
+local function isVisible(myHead, targetHead, targetChar)
+    if not settings.wallCheck then return true end
+
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
+    raycastParams.IgnoreWater = true
+
+    local origin = myHead.Position
+    local direction = targetHead.Position - origin
+    local result = workspace:Raycast(origin, direction, raycastParams)
+
+    if not result or result.Instance:IsDescendantOf(targetChar) then
+        return true
+    end
+    return false
+end
+
+-- 获取适合的目标（白名单过滤）
+local function getNearest(maxDist)
+    maxDist = maxDist or 1500
+    local myChar = LocalPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") or not myChar:FindFirstChild("Head") then return nil end
+    
+    local myHead = myChar.Head
+    local myPos = myChar.HumanoidRootPart.Position
+    local nearest, minDist = nil, maxDist
+
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("Head") and plr.Character:FindFirstChildOfClass("Humanoid") then
+            local plrTeam = plr.Team and plr.Team.Name or ""
+            
+            if ProtectedTeams[plrTeam] == true then
+                continue
+            end
+
+            local targetHead = plr.Character.Head
+            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+
+            if hum.Health > 0 then
+                local dist = (targetHead.Position - myPos).Magnitude
+                if dist < minDist then
+                    if isVisible(myHead, targetHead, plr.Character) then
+                        nearest = plr
+                        minDist = dist
+                    end
+                end
+            end
+        e
