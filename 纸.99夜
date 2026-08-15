@@ -13,13 +13,13 @@ local LocalPlayer = Players.LocalPlayer
 local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
 
 -- 2. 创建窗口与 Tab 分页
-local Window = zhiUI:CreateWindow({Title = "纸.99个夜晚"})
+local Window = zhiUI:CreateWindow({Title = "纸.99夜"})
 
-local MainTab   = Window:AddTab("⚔️ 主要战斗")
-local ItemsTab  = Window:AddTab("📦 带来物资")
-local ESPTab    = Window:AddTab("👁️ 透视显示")
-local PlantTab  = Window:AddTab("🌱 圆圈种树")
-local EnvTab    = Window:AddTab("☀️ 环境调整")
+local MainTab   = Window:AddTab("主要战斗")
+local ItemsTab  = Window:AddTab("带来物资")
+local ESPTab    = Window:AddTab("透视显示")
+local PlantTab  = Window:AddTab("圆圈种树")
+local EnvTab    = Window:AddTab("环境调整")
 
 -- ==========================================================
 -- 全局通用状态配置
@@ -183,19 +183,19 @@ local function bringItem(itemName)
     end)
 end
 
-ItemsTab:AddButton("🪵 带来木头 (Log)", function() bringItem("Log") end)
-ItemsTab:AddButton("⬛ 带来煤炭 (Coal)", function() bringItem("Coal") end)
-ItemsTab:AddButton("🥩 带来生兔肉 (Morsel)", function() bringItem("Morsel") end)
-ItemsTab:AddButton("🥕 带来萝卜 (Carrot)", function() bringItem("Carrot") end)
-ItemsTab:AddButton("🔩 带来螺栓 (Bolt)", function() bringItem("Bolt") end)
-ItemsTab:AddButton("🧱 带来金属板 (Sheet Metal)", function() bringItem("Sheet Metal") end)
-ItemsTab:AddButton("⚓ 带来风扇 (Broken Fan)", function() bringItem("Broken Fan") end)
-ItemsTab:AddButton("📻 带来老收音机 (Old Radio)", function() bringItem("Old Radio") end)
-ItemsTab:AddButton("🔦 带来老旧手电筒 (Old Flashlight)", function() bringItem("Old Flashlight") end)
-ItemsTab:AddButton("⛽ 带来燃料罐 (Fuel Canister)", function() bringItem("Fuel Canister") end)
-ItemsTab:AddButton("🔫 带来手枪 (Revolver)", function() bringItem("Revolver") end)
-ItemsTab:AddButton("💥 带来手枪弹药 (Revolver Ammo)", function() bringItem("Revolver Ammo") end)
-ItemsTab:AddButton("💣 带来步枪弹药 (Rifle Ammo)", function() bringItem("Rifle Ammo") end)
+ItemsTab:AddButton("带来木头 (Log)", function() bringItem("Log") end)
+ItemsTab:AddButton("带来煤炭 (Coal)", function() bringItem("Coal") end)
+ItemsTab:AddButton("带来生兔肉 (Morsel)", function() bringItem("Morsel") end)
+ItemsTab:AddButton("带来萝卜 (Carrot)", function() bringItem("Carrot") end)
+ItemsTab:AddButton("带来螺栓 (Bolt)", function() bringItem("Bolt") end)
+ItemsTab:AddButton("带来金属板 (Sheet Metal)", function() bringItem("Sheet Metal") end)
+ItemsTab:AddButton("带来风扇 (Broken Fan)", function() bringItem("Broken Fan") end)
+ItemsTab:AddButton("带来老收音机 (Old Radio)", function() bringItem("Old Radio") end)
+ItemsTab:AddButton("带来老旧手电筒 (Old Flashlight)", function() bringItem("Old Flashlight") end)
+ItemsTab:AddButton("带来燃料罐 (Fuel Canister)", function() bringItem("Fuel Canister") end)
+ItemsTab:AddButton("带来手枪 (Revolver)", function() bringItem("Revolver") end)
+ItemsTab:AddButton("带来手枪弹药 (Revolver Ammo)", function() bringItem("Revolver Ammo") end)
+ItemsTab:AddButton("带来步枪弹药 (Rifle Ammo)", function() bringItem("Rifle Ammo") end)
 
 -- ==========================================================
 -- 3. 👁️ 透视显示 Tab
