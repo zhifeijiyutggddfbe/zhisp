@@ -1,0 +1,200 @@
+-- ==========================================================
+-- 纸.被遗弃 (极致纯净版)
+-- 无通知弹窗，无表情符号
+-- ==========================================================
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- 加载 zhiUI 界面框架
+local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
+
+-- 创建主窗口
+local Window = zhiUI:CreateWindow({Title = "纸.被遗弃"})
+
+local MainTab = Window:AddTab("主要功能")
+local ESPTab  = Window:AddTab("透视显示")
+local AutoTab = Window:AddTab("自动功能")
+
+local state = {
+    infiniteStamina = false,
+    killerStamina = false,
+    antiDizzy = false,
+    autoGen = false,
+    fixInterval = 3,
+    espKillers = false,
+    espSurvivors = false,
+    espItems = false,
+    espGenerators = false,
+    espShadows = false,
+    autoCoin = false,
+}
+
+-- 核心功能模块
+local function updateStamina()
+    pcall(function()
+        local sprintModule = require(ReplicatedStorage.Systems.Character.Game.Sprinting)
+        if sprintModule then
+            sprintModule.StaminaLossDisabled = state.infiniteStamina
+            sprintModule.MinStamina = state.killerStamina and -100000 or 0
+        end
+    end)
+end
+
+local function triggerFixGenerator()
+    pcall(function()
+        local ingameMap = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map")
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if ingameMap and hrp then
+            local closestGen, closestDist = nil, math.huge
+            for _, g in ipairs(ingameMap:GetChildren()) do
+                if g.Name == "Generator" and g:FindFirstChild("Progress") and g.Progress.Value < 100 then
+                    local mainPart = g:FindFirstChild("Main") or g.PrimaryPart
+                    if mainPart then
+                        local dist = (mainPart.Position - hrp.Position).Magnitude
+                        if dist < closestDist then
+                            closestDist = dist
+                            closestGen = g
+                        end
+                    end
+                end
+            end
+            if closestGen and closestGen:FindFirstChild("Remotes") and closestGen.Remotes:FindFirstChild("RE") then
+                closestGen.Remotes.RE:FireServer()
+            end
+        end
+    end)
+end
+
+local function removeModelEffects(model)
+    if not model then return end
+    local highlight = model:FindFirstChild("ModelHighlight") or model:FindFirstChild("Highlight")
+    local billboard = model:FindFirstChild("NameBillboard") or model:FindFirstChild("NameLabel") or model:FindFirstChild("Shadow3DText")
+    if highlight then highlight:Destroy() end
+    if billboard then billboard:Destroy() end
+end
+
+local function applyESP(model, fillColor, labelText)
+    if not (model and model:IsA("Model")) then return end
+    local highlight = model:FindFirstChild("ModelHighlight") or Instance.new("Highlight")
+    highlight.Name = "ModelHighlight"
+    highlight.FillColor = fillColor
+    highlight.OutlineColor = fillColor
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = model
+
+    local billboard = model:FindFirstChild("NameBillboard") or Instance.new("BillboardGui")
+    billboard.Name = "NameBillboard"
+    billboard.Size = UDim2.new(0, 100, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 2, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Adornee = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+    
+    local textLabel = billboard:FindFirstChild("TextLabel") or Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.Text = labelText or model.Name
+    textLabel.Font = Enum.Font.SourceSansBold
+    textLabel.TextSize = 12
+    textLabel.TextColor3 = fillColor
+    textLabel.BackgroundTransparency = 1
+    textLabel.Parent = billboard
+    billboard.Parent = model
+end
+
+-- UI 绑定
+MainTab:AddToggle("禁用耐力消耗 (人类)", false, function(val) state.infiniteStamina = val; updateStamina() end)
+MainTab:AddToggle("无限耐力 (杀手)", false, function(val) state.killerStamina = val; updateStamina() end)
+MainTab:AddToggle("免减速/免眩晕 (锁定20移速)", false, function(val)
+    state.antiDizzy = val
+    if val then
+        task.spawn(function()
+            while state.antiDizzy do
+                pcall(function() if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then LocalPlayer.Character.Humanoid.WalkSpeed = 20 end end)
+                task.wait(0.1)
+            end
+        end)
+    end
+end)
+
+MainTab:AddToggle("自动修发电机", false, function(val)
+    state.autoGen = val
+    if val then
+        task.spawn(function()
+            while state.autoGen do
+                triggerFixGenerator()
+                task.wait(state.fixInterval)
+            end
+        end)
+    end
+end)
+
+ESPTab:AddToggle("透视杀手", false, function(val)
+    state.espKillers = val
+    if val then
+        task.spawn(function()
+            while state.espKillers do
+                pcall(function()
+                    local folder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
+                    if folder then for _, c in ipairs(folder:GetChildren()) do if c:IsA("Model") then applyESP(c, Color3.fromRGB(255, 0, 0), "杀手") end end end
+                end)
+                task.wait(2)
+            end
+        end)
+    else
+        pcall(function() local folder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers") if folder then for _, c in ipairs(folder:GetChildren()) do removeModelEffects(c) end end end)
+    end
+end)
+
+ESPTab:AddToggle("透视幸存者", false, function(val)
+    state.espSurvivors = val
+    if val then
+        task.spawn(function()
+            while state.espSurvivors do
+                pcall(function()
+                    local folder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+                    if folder then for _, c in ipairs(folder:GetChildren()) do if c:IsA("Model") and c.Name ~= LocalPlayer.Name then applyESP(c, Color3.fromRGB(0, 255, 0), c.Name) end end end
+                end)
+                task.wait(2)
+            end
+        end)
+    else
+        pcall(function() local folder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors") if folder then for _, c in ipairs(folder:GetChildren()) do removeModelEffects(c) end end end)
+    end
+end)
+
+ESPTab:AddToggle("透视发电机", false, function(val)
+    state.espGenerators = val
+    if val then
+        task.spawn(function()
+            while state.espGenerators do
+                pcall(function()
+                    local mapFolder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map")
+                    if mapFolder then
+                        for _, gen in ipairs(mapFolder:GetChildren()) do
+                            if gen.Name == "Generator" then
+                                local p = gen:FindFirstChild("Progress") and gen.Progress.Value or 0
+                                applyESP(gen, p < 100 and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50), p < 100 and "电机: "..p.."%" or "完成")
+                            end
+                        end
+                    end
+                end)
+                task.wait(0.5)
+            end
+        end)
+    else
+        pcall(function() local mapFolder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map") if mapFolder then for _, g in ipairs(mapFolder:GetChildren()) do if g.Name == "Generator" then removeModelEffects(g) end end end end)
+    end
+end)
+
+AutoTab:AddToggle("自动抛硬币", false, function(val)
+    state.autoCoin = val
+    if val then
+        task.spawn(function()
+            while state.autoCoin do
+                pcall(function() ReplicatedStorage.Modules.Network.RemoteEvent:FireServer("UseActorAbility", "CoinFlip") end)
+                task.wait(0.1)
+            end
+        end)
+    end
+end)
