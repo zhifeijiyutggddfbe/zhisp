@@ -1,0 +1,389 @@
+--[[ 
+    zhiUI Hub - Ohio Special Edition
+    已整合完整的 Ohio 脚本功能至 zhiUI 界面框架
+]]
+
+-- 1. 加载 zhiUI 库
+local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
+
+-- 2. 游戏服务与变量声明
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- 脚本功能开关及配置变量
+local Config = {
+    -- 战斗
+    NinjaStarAura = false,
+    TPKill = false,
+    PunchAura = false,
+    StompAura = false,
+    AutoBuyStars = false,
+    AutoEquipFist = false,
+    -- 全图打击
+    FullMapRPG = false,
+    FullMapFlamethrower = false,
+    FullMapTaser = false,
+    FullMapPepper = false,
+    -- 保护
+    AutoArmor = false,
+    AutoMask = false,
+    AutoHeal = false,
+    AntiKnock = false,
+    AntiVoid = false,
+    AntiFling = false,
+    AntiStun = false,
+    ESP = false,
+    -- 活动农场
+    GingerbreadFarm = false,
+    ElfFarm = false,
+    AutoClaimQuests = false
+}
+
+-- -------------------------------------------------------------
+-- 核心绕过逻辑 (Bypasses & Hooks)
+-- -------------------------------------------------------------
+pcall(function()
+    -- 绕过检测与遥测机制
+    if ReplicatedStorage:FindFirstChild("makeExplosion") then
+        ReplicatedStorage.makeExplosion:Destroy()
+    end
+    
+    -- 绕过战斗锁定机制
+    local rawHook
+    rawHook = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if method == "InvokeServer" and self.Name == "isInCombat" then
+            return false
+        end
+        return rawHook(self, ...)
+    end)
+end)
+
+-- 内部实用函数
+local function getHitID()
+    return "EZohio123" -- GUID 验证绕过标识
+end
+
+local function getTargetPlayer()
+    local closest, minDistance = nil, math.huge
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+            if distance < minDistance then
+                minDistance = distance
+                closest = player
+            end
+        end
+    end
+    return closest
+end
+
+-- -------------------------------------------------------------
+-- 后台循环逻辑处理 (Heartbeat / RenderStepped)
+-- -------------------------------------------------------------
+RunService.RenderStepped:Connect(function()
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    
+    -- 1. 防虚空跌落
+    if Config.AntiVoid and char.HumanoidRootPart.Position.Y < -200 then
+        char.HumanoidRootPart.CFrame = CFrame.new(char.HumanoidRootPart.Position.X, 50, char.HumanoidRootPart.Position.Z)
+    end
+    
+    -- 2. 防甩飞 (关闭物理碰撞)
+    if Config.AntiFling then
+        for _, part in pairs(char:GetChildren()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+    
+    -- 3. 防倒地状态重置
+    if Config.AntiKnock and char:FindFirstChild("knocked") then
+        char.knocked.Value = false
+    end
+    
+    -- 4. 自动装备拳头
+    if Config.AutoEquipFist and not char:FindFirstChildOfClass("Tool") then
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        if backpack and backpack:FindFirstChild("Combat") then
+            backpack.Combat.Parent = char
+        end
+    end
+    
+    -- 5. 飞镖光环 & 瞬移秒杀
+    if Config.NinjaStarAura then
+        local target = getTargetPlayer()
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            if Config.TPKill then
+                char.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 1.5)
+            end
+            
+            pcall(function()
+                ReplicatedStorage.Remotes.ThrowNinjaStar:FireServer(
+                    target.Character.HumanoidRootPart.Position,
+                    target.Character.HumanoidRootPart,
+                    getHitID()
+                )
+            end)
+        end
+    end
+    
+    -- 6. 近战拳头光环
+    if Config.PunchAura then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local dist = (p.Character.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
+                if dist <= 35 then
+                    pcall(function()
+                        ReplicatedStorage.Remotes.meleemegapunch:FireServer(p.Character)
+                    end)
+                end
+            end
+        end
+    end
+    
+    -- 7. 自动踩踏 / 抓取
+    if Config.StompAura then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Humanoid") then
+                if p.Character.Humanoid.Health <= 20 and p.Character.Humanoid.Health > 0 then
+                    local dist = (p.Character.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
+                    if dist <= 40 then
+                        pcall(function()
+                            ReplicatedStorage.Remotes.finish:FireServer(p.Character)
+                        end)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- 自动买弹药/装备逻辑定时器
+task.spawn(function()
+    while task.wait(0.5) do
+        -- 自动购买飞镖
+        if Config.AutoBuyStars then
+            pcall(function() ReplicatedStorage.Remotes.attemptPurchase:FireServer("Ninja Star") end)
+        end
+        -- 自动购买护甲
+        if Config.AutoArmor then
+            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+            if hum and hum.Health > 35 then
+                pcall(function() ReplicatedStorage.Remotes.attemptPurchase:FireServer("Light Vest") end)
+            end
+        end
+        -- 自动戴面具
+        if Config.AutoMask then
+            pcall(function() ReplicatedStorage.Remotes.attemptPurchase:FireServer("Hockey Mask") end)
+        end
+        -- 自动回血
+        if Config.AutoHeal then
+            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+            if hum and hum.Health < hum.MaxHealth and hum.Health >= 5 then
+                pcall(function() ReplicatedStorage.Remotes.attemptPurchase:FireServer("Bandage") end)
+            end
+        end
+    end
+end)
+
+-- -------------------------------------------------------------
+-- UI 界面构建 (zhiUI 架构)
+-- -------------------------------------------------------------
+
+local Window = zhiUI:CreateWindow({
+    Title = "Yttrium | Ohio Hub"
+})
+
+-- 通知脚本已加载
+zhiUI:Notify("系统通知", "Yttrium Hub 已成功载入！", 4)
+
+-- ================= 【页签 1：战斗功能】 =================
+local CombatTab = Window:AddTab("战斗功能")
+
+CombatTab:AddToggle("飞镖秒杀光环", false, function(state)
+    Config.NinjaStarAura = state
+end)
+
+CombatTab:AddToggle("传送贴身杀 (TP Kill)", false, function(state)
+    Config.TPKill = state
+end)
+
+CombatTab:AddToggle("自动购买飞镖", false, function(state)
+    Config.AutoBuyStars = state
+end)
+
+CombatTab:AddDivider()
+
+CombatTab:AddToggle("一拳近战光环 (Melee Aura)", false, function(state)
+    Config.PunchAura = state
+end)
+
+CombatTab:AddToggle("残血踩踏光环 (Stomp Aura)", false, function(state)
+    Config.StompAura = state
+end)
+
+CombatTab:AddToggle("自动切回拳头 (Auto Equip)", false, function(state)
+    Config.AutoEquipFist = state
+end)
+
+-- ================= 【页签 2：全图打击】 =================
+local AttackTab = Window:AddTab("全图打击")
+
+AttackTab:AddToggle("全图 RPG 爆破打击", false, function(state)
+    Config.FullMapRPG = state
+    task.spawn(function()
+        while Config.FullMapRPG do
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    pcall(function()
+                        ReplicatedStorage.Remotes.RPG:FireServer(
+                            p.Character.HumanoidRootPart.Position,
+                            p.Character.HumanoidRootPart,
+                            getHitID()
+                        )
+                    end)
+                end
+            end
+            task.wait(0.2)
+        end
+    end)
+end)
+
+AttackTab:AddToggle("全图火焰喷射器打击", false, function(state)
+    Config.FullMapFlamethrower = state
+    task.spawn(function()
+        while Config.FullMapFlamethrower do
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    pcall(function()
+                        ReplicatedStorage.Remotes.Flamethrower:FireServer(p.Character.HumanoidRootPart)
+                    end)
+                end
+            end
+            task.wait(0.1)
+        end
+    end)
+end)
+
+AttackTab:AddButton("一键补充全图武器子弹", function()
+    pcall(function()
+        ReplicatedStorage.Remotes.attemptPurchaseAmmo:FireServer("RPG")
+        ReplicatedStorage.Remotes.attemptPurchaseAmmo:FireServer("Flamethrower")
+    end)
+    zhiUI:Notify("弹药补给", "已成功提交子弹购买请求", 2)
+end)
+
+-- ================= 【页签 3：生存与防作弊】 =================
+local ProtectTab = Window:AddTab("生存保护")
+
+ProtectTab:AddToggle("自动购买护甲 (Auto Armor)", false, function(state)
+    Config.AutoArmor = state
+end)
+
+ProtectTab:AddToggle("自动戴曲棍球面具 (Auto Mask)", false, function(state)
+    Config.AutoMask = state
+end)
+
+ProtectTab:AddToggle("自动使用绷带恢复 (Auto Heal)", false, function(state)
+    Config.AutoHeal = state
+end)
+
+ProtectTab:AddDivider()
+
+ProtectTab:AddToggle("防止倒地/眩晕 (Anti Knock)", false, function(state)
+    Config.AntiKnock = state
+end)
+
+ProtectTab:AddToggle("防止坠落虚空 (Anti Void)", false, function(state)
+    Config.AntiVoid = state
+end)
+
+ProtectTab:AddToggle("防挂碰撞甩飞 (Anti Fling)", false, function(state)
+    Config.AntiFling = state
+end)
+
+ProtectTab:AddToggle("显示全图玩家血量与名字 (ESP)", false, function(state)
+    Config.ESP = state
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Character and p.Character:FindFirstChild("Humanoid") then
+            p.Character.Humanoid.NameDisplayDistance = state and 99999 or 100
+            p.Character.Humanoid.HealthDisplayDistance = state and 99999 or 100
+        end
+    end
+end)
+
+-- ================= 【页签 4：圣诞活动农场】 =================
+local EventTab = Window:AddTab("活动农场")
+
+EventTab:AddToggle("自动收集姜饼人/资源盒", false, function(state)
+    Config.GingerbreadFarm = state
+    task.spawn(function()
+        while Config.GingerbreadFarm do
+            for _, obj in pairs(Workspace:GetChildren()) do
+                if obj.Name:find("Gingerbread") or obj.Name:find("CashBundle") then
+                    if obj:FindFirstChild("ClickDetector") then
+                        fireclickdetector(obj.ClickDetector)
+                    end
+                end
+            end
+            task.wait(0.5)
+        end
+    end)
+end)
+
+EventTab:AddToggle("自动寻找并搜集圣诞精灵", false, function(state)
+    Config.ElfFarm = state
+    task.spawn(function()
+        while Config.ElfFarm do
+            for _, obj in pairs(Workspace:GetChildren()) do
+                if obj.Name:find("Elf") then
+                    pcall(function()
+                        ReplicatedStorage.Remotes.attemptCollectElf:FireServer(obj)
+                    end)
+                end
+            end
+            task.wait(1)
+        end
+    end)
+end)
+
+EventTab:AddButton("自动领取所有活动任务奖励", function()
+    pcall(function()
+        ReplicatedStorage.Remotes.claimQuestReward:FireServer()
+    end)
+    zhiUI:Notify("活动", "已尝试自动领取活动奖励！", 3)
+end)
+
+-- ================= 【页签 5：黑科技突破】 =================
+local BypassTab = Window:AddTab("商店突破")
+
+BypassTab:AddButton("解锁移动商店全部锁定/限定武器", function()
+    pcall(function()
+        local shopData = require(ReplicatedStorage:WaitForChild("ShopModule"))
+        for item, data in pairs(shopData) do
+            if data.Stock then
+                data.Stock = 999999
+            end
+        end
+    end)
+    zhiUI:Notify("商店破解", "限定武器库存已成功修改为无限！", 4)
+end)
+
+BypassTab:AddButton("解锁所有 VIP 高级动作/表情", function()
+    pcall(function()
+        local emoteModule = require(ReplicatedStorage:WaitForChild("EmotesModule"))
+        for _, emote in pairs(emoteModule) do
+            emote.Locked = false
+        end
+    end)
+    zhiUI:Notify("动作解锁", "高级动作与表情包已全部解锁！", 4)
+end)
