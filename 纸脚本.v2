@@ -344,6 +344,19 @@ ExclusiveTab:AddButton(
     end
 )
 
+ExclusiveTab:AddButton(
+    "加载 纸.ohio",
+    function()
+
+        pcall(function()
+            loadstring(game:HttpGet(
+                "https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.ohio"
+            ))()
+        end)
+
+    end
+)
+
 -- ==========================================================
 -- 工具
 -- ==========================================================
