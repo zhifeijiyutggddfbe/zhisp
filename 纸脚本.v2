@@ -1,8 +1,4 @@
--- ==========================================================
--- 纸.脚本中心 v2
--- zhiUI 通用脚本中心
--- 单独执行版本
--- ==========================================================
+loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/main/%E7%BA%B8.%E7%9B%91%E7%8B%B1%E4%BA%BA%E7%94%9F"))()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
