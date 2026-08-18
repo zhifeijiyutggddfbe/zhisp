@@ -1,3 +1,5 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.bypass"))()
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
