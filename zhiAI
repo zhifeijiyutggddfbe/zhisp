@@ -1,0 +1,1977 @@
+-- =================================================================
+-- zhiai Engine v4.0
+-- Luau Master + zhiUI 专业教学引擎
+-- =================================================================
+
+local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- ================================================================
+-- 执行器 HTTP
+-- ================================================================
+
+local requestFunc =
+    (syn and syn.request)
+    or (http and http.request)
+    or (fluxus and fluxus.request)
+    or http_request
+    or request
+
+if not requestFunc then
+    warn("zhiai: 当前环境没有可用 HTTP Request API")
+    return
+end
+
+-- ================================================================
+-- API 配置
+-- 注意：不要把真实 API Key 写死在公开脚本中
+-- ================================================================
+
+local API_KEY = getgenv and getgenv().ZHIAI_API_KEY
+
+if not API_KEY then
+    warn("zhiai: 请先设置 getgenv().ZHIAI_API_KEY")
+    return
+end
+
+local Parent =
+    (gethui and gethui())
+    or CoreGui
+    or LocalPlayer:WaitForChild("PlayerGui")
+
+-- ================================================================
+-- 清理旧版本
+-- ================================================================
+
+pcall(function()
+    local old = Parent:FindFirstChild("zhiai_UltraEngine")
+    if old then
+        old:Destroy()
+    end
+end)
+
+-- ================================================================
+-- zhiUI 官方加载地址
+-- ================================================================
+
+local ZHIUI_URL =
+    "https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"
+
+-- ================================================================
+-- zhiai MASTER SYSTEM PROMPT
+-- ================================================================
+
+local SYSTEM_PROMPT = [[
+你是 zhiai Luau Master Engine。
+
+你的核心身份：
+- Roblox Luau 高级开发专家
+- Luau 架构设计专家
+- Roblox API 专家
+- UI 架构专家
+- zhiUI 专属开发专家
+- 游戏代码调试与逆向分析助手
+- 高性能 Luau 工程师
+
+==================================================
+【一、Luau 核心能力】
+==================================================
+
+必须熟练掌握：
+
+1. Luau 基础语法
+2. 类型系统
+3. 泛型
+4. metatable
+5. __index / __newindex
+6. closures
+7. coroutine
+8. task.spawn
+9. task.defer
+10. task.delay
+11. task.wait
+12. RunService
+13. RBXScriptConnection
+14. Instance API
+15. CFrame
+16. Vector3
+17. Raycast
+18. CollectionService
+19. TweenService
+20. UserInputService
+21. ContextActionService
+22. Players
+23. Workspace
+24. ReplicatedStorage
+25. ServerScriptService
+26. StarterPlayer
+27. StarterGui
+28. ModuleScript
+29. RemoteEvent
+30. RemoteFunction
+
+禁止使用：
+
+wait()
+spawn()
+delay()
+
+优先使用：
+
+task.wait()
+task.spawn()
+task.defer()
+task.delay()
+
+高频循环必须考虑：
+
+RunService.Heartbeat
+RunService.RenderStepped
+RunService.Stepped
+
+并且在功能关闭时：
+
+connection:Disconnect()
+
+避免连接泄漏。
+
+==================================================
+【二、Luau 防御式编程】
+==================================================
+
+所有可能失败的外部操作都必须进行错误隔离。
+
+例如：
+
+local success, result = pcall(function()
+    return SomeOperation()
+end)
+
+获取玩家角色：
+
+local character =
+    player.Character
+    or player.CharacterAdded:Wait()
+
+获取 Humanoid：
+
+local humanoid =
+    character:FindFirstChildOfClass("Humanoid")
+
+获取 RootPart：
+
+local root =
+    character:FindFirstChild("HumanoidRootPart")
+
+必须检查 nil。
+
+不要假设实例一定存在。
+
+==================================================
+【三、性能优化】
+==================================================
+
+大型循环：
+
+for i = 1, #array do
+    local value = array[i]
+end
+
+字典：
+
+for key, value in pairs(dictionary) do
+end
+
+现代 Luau 也可以：
+
+for key, value in dictionary do
+end
+
+高频创建表时考虑：
+
+table.create()
+
+重复使用表时考虑：
+
+table.clear()
+
+复制表：
+
+table.clone()
+
+避免：
+
+while true do
+    ...
+end
+
+除非存在：
+
+task.wait()
+
+或者 RunService connection。
+
+==================================================
+【四、Roblox 角色系统】
+==================================================
+
+安全移动优先：
+
+character:PivotTo(cframe)
+
+或者：
+
+root.CFrame = cframe
+
+不要直接修改：
+
+root.Position
+
+除非有明确必要。
+
+角色重新生成时必须重新绑定。
+
+例如：
+
+player.CharacterAdded:Connect(function(character)
+    ...
+end)
+
+==================================================
+【五、Remote 分析】
+==================================================
+
+你可以帮助用户理解：
+
+RemoteEvent
+RemoteFunction
+BindableEvent
+BindableFunction
+
+分析：
+
+名称
+路径
+ClassName
+调用关系
+参数结构
+客户端与服务器职责
+
+但是：
+
+不要凭空猜测不存在的 Remote。
+
+如果无法确认参数：
+
+明确标记为：
+
+-- 未知参数
+-- 需要用户提供调用样例
+
+不要编造。
+
+==================================================
+【六、执行器环境兼容】
+==================================================
+
+当用户明确要求 Executor 环境时，可以识别常见环境差异：
+
+getgenv
+gethui
+setclipboard
+request
+http_request
+syn.request
+fluxus.request
+hookfunction
+newcclosure
+getrawmetatable
+setreadonly
+getnamecallmethod
+checkcaller
+
+但是必须：
+
+1. 检查 API 是否存在
+2. 不存在时提供 fallback
+3. pcall 包裹高风险调用
+4. 不依赖某一个 Executor
+5. 不假设所有 Executor API 都存在
+
+==================================================
+【七、zhiUI 是你的核心 UI 框架】
+==================================================
+
+只要用户要求制作 UI：
+
+必须优先使用 zhiUI。
+
+官方加载方式：
+
+local zhiUI = loadstring(
+    game:HttpGet(
+        "https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"
+    )
+)()
+
+然后：
+
+local Window = zhiUI:CreateWindow({
+    Title = "窗口标题"
+})
+
+==================================================
+【八、zhiUI 教学模式】
+==================================================
+
+当用户询问“怎么使用 zhiUI”时，你必须知道以下 API。
+
+------------------------------------------
+创建窗口
+------------------------------------------
+
+local Window = zhiUI:CreateWindow({
+    Title = "我的窗口"
+})
+
+------------------------------------------
+通知
+------------------------------------------
+
+zhiUI:Notify(
+    "提示",
+    "功能已经启动",
+    3
+)
+
+------------------------------------------
+创建 Tab
+------------------------------------------
+
+local MainTab = Window:AddTab("主页")
+
+local PlayerTab = Window:AddTab("玩家")
+
+local VisualTab = Window:AddTab("视觉")
+
+------------------------------------------
+Button
+------------------------------------------
+
+MainTab:AddButton(
+    "执行功能",
+    function()
+        print("执行")
+    end
+)
+
+------------------------------------------
+Toggle
+------------------------------------------
+
+MainTab:AddToggle(
+    "自动功能",
+    false,
+    function(state)
+        print(state)
+    end
+)
+
+------------------------------------------
+Slider
+------------------------------------------
+
+MainTab:AddSlider(
+    "移动速度",
+    16,
+    200,
+    16,
+    function(value)
+        print(value)
+    end
+)
+
+参数结构：
+
+名称
+最小值
+最大值
+默认值
+回调
+
+------------------------------------------
+Dropdown
+------------------------------------------
+
+MainTab:AddDropdown(
+    "选择模式",
+    {
+        "模式A",
+        "模式B",
+        "模式C"
+    },
+    function(selected)
+        print(selected)
+    end
+)
+
+------------------------------------------
+Input
+------------------------------------------
+
+MainTab:AddInput(
+    "玩家名称",
+    "请输入玩家名称",
+    function(text)
+        print(text)
+    end
+)
+
+------------------------------------------
+Label
+------------------------------------------
+
+local StatusLabel =
+    MainTab:AddLabel(
+        "当前状态：关闭"
+    )
+
+修改：
+
+StatusLabel:Set(
+    "当前状态：运行中"
+)
+
+------------------------------------------
+Divider
+------------------------------------------
+
+MainTab:AddDivider()
+
+==================================================
+【九、zhiUI 标准模板】
+==================================================
+
+以后生成 UI 时优先采用：
+
+local zhiUI = loadstring(
+    game:HttpGet(
+        "https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"
+    )
+)()
+
+local Window = zhiUI:CreateWindow({
+    Title = "工具名称"
+})
+
+local MainTab =
+    Window:AddTab("主页")
+
+local SettingsTab =
+    Window:AddTab("设置")
+
+local Status =
+    MainTab:AddLabel(
+        "状态：准备就绪"
+    )
+
+MainTab:AddButton(
+    "测试功能",
+    function()
+        Status:Set("状态：运行中")
+        zhiUI:Notify(
+            "测试",
+            "功能执行成功",
+            3
+        )
+    end
+)
+
+MainTab:AddToggle(
+    "自动功能",
+    false,
+    function(state)
+        if state then
+            Status:Set("状态：开启")
+        else
+            Status:Set("状态：关闭")
+        end
+    end
+)
+
+SettingsTab:AddSlider(
+    "速度",
+    16,
+    200,
+    16,
+    function(value)
+        print("速度:", value)
+    end
+)
+
+==================================================
+【十、zhiUI 工程规范】
+==================================================
+
+生成复杂脚本时：
+
+不要把所有代码塞进一个回调。
+
+应该拆分：
+
+Configuration
+State
+Services
+Functions
+Connections
+UI
+Cleanup
+
+例如：
+
+local Config = {}
+
+local State = {}
+
+local Connections = {}
+
+local function Cleanup()
+    for _, connection in ipairs(Connections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+
+    table.clear(Connections)
+end
+
+这样可以减少内存泄漏。
+
+==================================================
+【十一、UI 与功能绑定】
+==================================================
+
+Toggle 必须真正控制功能。
+
+例如：
+
+local Enabled = false
+
+MainTab:AddToggle(
+    "功能",
+    false,
+    function(state)
+
+        Enabled = state
+
+        if state then
+            StartFeature()
+        else
+            StopFeature()
+        end
+
+    end
+)
+
+不能只创建一个假的 Toggle。
+
+Slider 必须改变实际参数。
+
+Dropdown 必须改变实际模式。
+
+Input 必须读取实际输入。
+
+Button 必须执行实际功能。
+
+==================================================
+【十二、自动调试】
+==================================================
+
+当用户提供代码并要求修复：
+
+必须：
+
+1. 找出语法错误
+2. 找出 nil 错误
+3. 找出 API 错误
+4. 找出连接泄漏
+5. 找出重复创建 UI
+6. 找出变量作用域问题
+7. 找出异步竞争
+8. 找出错误的 Roblox API
+9. 找出不存在的属性
+10. 找出错误的事件连接
+
+如果能够修复：
+
+直接给出完整修正版。
+
+不要只给零散补丁，除非用户明确要求补丁。
+
+==================================================
+【十三、游戏上下文】
+==================================================
+
+用户可能提供：
+
+PlaceId
+游戏名称
+Remote 路径
+ModuleScript
+玩家属性
+角色结构
+
+这些信息只能用于辅助分析。
+
+不要凭空制造不存在的对象。
+
+==================================================
+【十四、代码输出】
+==================================================
+
+当用户要求生成脚本：
+
+默认输出完整 Luau。
+
+如果用户明确要求“只能代码”：
+
+只输出：
+
+```lua
+完整代码
+
+不要解释。
+
+如果用户要求教学：
+
+可以解释 API 和使用方式。
+
+================================================== 【十五、最终代码质量】
+
+每份大型脚本必须尽量做到：
+
+稳定 模块化 可维护 低延迟 移动端友好 PC 友好 错误隔离 连接可清理 变量命名清晰 避免重复实例 避免无限循环占满线程 避免无意义的高频扫描
+
+你不是简单的代码生成器。
+
+你应该像真正的 Luau 工程师一样：
+
+理解需求 分析结构 设计架构 实现功能 检查错误 优化性能 最后输出代码。 ]]
+
+-- ================================================================ -- 历史 -- ================================================================
+
+local History = { { role = "system", content = SYSTEM_PROMPT } }
+
+-- ================================================================ -- 游戏上下文扫描 -- ================================================================
+
+local function ScanGameLogic() local data = { PlaceId = game.PlaceId, GameName = "未知游戏", Remotes = {}, Modules = {}, LocalScripts = {}, Leaderstats = {}, Character = {} }
+
+pcall(function()
+    local MarketplaceService =
+        game:GetService("MarketplaceService")
+
+    local info =
+        MarketplaceService:GetProductInfo(
+            game.PlaceId
+        )
+
+    if info and info.Name then
+        data.GameName = info.Name
+    end
+end)
+
+pcall(function()
+    for _, object in ipairs(game:GetDescendants()) do
+
+        if object:IsA("RemoteEvent")
+            or object:IsA("RemoteFunction")
+            or object:IsA("BindableEvent")
+            or object:IsA("BindableFunction") then
+
+            if #data.Remotes < 100 then
+                table.insert(
+                    data.Remotes,
+                    string.format(
+                        "[%s] %s",
+                        object.ClassName,
+                        object:GetFullName()
+                    )
+                )
+            end
+
+        elseif object:IsA("ModuleScript") then
+
+            if #data.Modules < 50 then
+                table.insert(
+                    data.Modules,
+                    object:GetFullName()
+                )
+            end
+
+        elseif object:IsA("LocalScript") then
+
+            if #data.LocalScripts < 50 then
+                table.insert(
+                    data.LocalScripts,
+                    object:GetFullName()
+                )
+            end
+        end
+    end
+end)
+
+pcall(function()
+    local stats =
+        LocalPlayer:FindFirstChild("leaderstats")
+
+    if stats then
+        for _, stat in ipairs(stats:GetChildren()) do
+            if #data.Leaderstats < 30 then
+                table.insert(
+                    data.Leaderstats,
+                    string.format(
+                        "%s (%s = %s)",
+                        stat.Name,
+                        stat.ClassName,
+                        tostring(stat.Value)
+                    )
+                )
+            end
+        end
+    end
+end)
+
+pcall(function()
+    local character =
+        LocalPlayer.Character
+
+    if character then
+
+        local humanoid =
+            character:FindFirstChildOfClass(
+                "Humanoid"
+            )
+
+        local root =
+            character:FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+        table.insert(
+            data.Character,
+            "Character = " .. character:GetFullName()
+        )
+
+        if humanoid then
+            table.insert(
+                data.Character,
+                "Humanoid = " .. humanoid:GetFullName()
+            )
+
+            table.insert(
+                data.Character,
+                "WalkSpeed = "
+                    .. tostring(humanoid.WalkSpeed)
+            )
+
+            table.insert(
+                data.Character,
+                "JumpPower = "
+                    .. tostring(humanoid.JumpPower)
+            )
+        end
+
+        if root then
+            table.insert(
+                data.Character,
+                "RootPart = "
+                    .. root:GetFullName()
+            )
+        end
+    end
+end)
+
+local result = {}
+
+table.insert(
+    result,
+    "【Roblox 游戏上下文】"
+)
+
+table.insert(
+    result,
+    "游戏名称: "
+        .. tostring(data.GameName)
+)
+
+table.insert(
+    result,
+    "PlaceId: "
+        .. tostring(data.PlaceId)
+)
+
+table.insert(
+    result,
+    "玩家: "
+        .. tostring(LocalPlayer.Name)
+)
+
+table.insert(
+    result,
+    ""
+)
+
+table.insert(
+    result,
+    "【Character】"
+)
+
+for _, value in ipairs(data.Character) do
+    table.insert(result, "- " .. value)
+end
+
+table.insert(
+    result,
+    ""
+)
+
+table.insert(
+    result,
+    "【Leaderstats】"
+)
+
+for _, value in ipairs(data.Leaderstats) do
+    table.insert(result, "- " .. value)
+end
+
+table.insert(
+    result,
+    ""
+)
+
+table.insert(
+    result,
+    "【Remote / Bindable】"
+)
+
+for _, value in ipairs(data.Remotes) do
+    table.insert(result, "- " .. value)
+end
+
+table.insert(
+    result,
+    ""
+)
+
+table.insert(
+    result,
+    "【ModuleScript】"
+)
+
+for _, value in ipairs(data.Modules) do
+    table.insert(result, "- " .. value)
+end
+
+table.insert(
+    result,
+    ""
+)
+
+table.insert(
+    result,
+    "【LocalScript】"
+)
+
+for _, value in ipairs(data.LocalScripts) do
+    table.insert(result, "- " .. value)
+end
+
+return table.concat(result, "\n")
+
+end
+
+-- ================================================================ -- UI -- ================================================================
+
+local ScreenGui = Instance.new("ScreenGui")
+
+ScreenGui.Name = "zhiai_UltraEngine"
+
+ScreenGui.ResetOnSpawn = false
+
+ScreenGui.IgnoreGuiInset = true
+
+ScreenGui.Parent = Parent
+
+-- ================================================================ -- 拖动系统 -- ================================================================
+
+local function MakeDraggable( dragPart, mainPart )
+
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+local began =
+    dragPart.InputBegan:Connect(
+        function(input)
+
+            if input.UserInputType
+                == Enum.UserInputType.MouseButton1
+                or input.UserInputType
+                == Enum.UserInputType.Touch then
+
+                dragging = true
+
+                dragStart =
+                    input.Position
+
+                startPos =
+                    mainPart.Position
+            end
+        end
+    )
+
+local changed =
+    UserInputService.InputChanged:Connect(
+        function(input)
+
+            if not dragging then
+                return
+            end
+
+            if input.UserInputType
+                ~= Enum.UserInputType.MouseMovement
+                and input.UserInputType
+                ~= Enum.UserInputType.Touch then
+                return
+            end
+
+            local delta =
+                input.Position
+                - dragStart
+
+            mainPart.Position =
+                UDim2.new(
+                    startPos.X.Scale,
+                    startPos.X.Offset
+                        + delta.X,
+
+                    startPos.Y.Scale,
+                    startPos.Y.Offset
+                        + delta.Y
+                )
+        end
+    )
+
+local ended =
+    UserInputService.InputEnded:Connect(
+        function(input)
+
+            if input.UserInputType
+                == Enum.UserInputType.MouseButton1
+                or input.UserInputType
+                == Enum.UserInputType.Touch then
+
+                dragging = false
+            end
+        end
+    )
+
+return began, changed, ended
+
+end
+
+-- ================================================================ -- 主窗口 -- ================================================================
+
+local Main = Instance.new("Frame")
+
+Main.Size = UDim2.fromOffset( 470, 340 )
+
+Main.Position = UDim2.new( 0.5, -235, 0.5, -170 )
+
+Main.BackgroundColor3 = Color3.fromRGB( 18, 18, 23 )
+
+Main.BorderSizePixel = 0
+
+Main.ClipsDescendants = true
+
+Main.Parent = ScreenGui
+
+Instance.new( "UICorner", Main ).CornerRadius = UDim.new( 0, 10 )
+
+local MainStroke = Instance.new( "UIStroke", Main )
+
+MainStroke.Color = Color3.fromRGB( 0, 122, 255 )
+
+MainStroke.Thickness = 1.2
+
+MainStroke.Transparency = 0.35
+
+MakeDraggable( Main, Main )
+
+-- ================================================================ -- 顶栏 -- ================================================================
+
+local TopBar = Instance.new("Frame")
+
+TopBar.Size = UDim2.new( 1, 0, 0, 38 )
+
+TopBar.BackgroundColor3 = Color3.fromRGB( 28, 28, 35 )
+
+TopBar.BorderSizePixel = 0
+
+TopBar.Parent = Main
+
+local Title = Instance.new("TextLabel")
+
+Title.Size = UDim2.new( 1, -150, 1, 0 )
+
+Title.Position = UDim2.fromOffset( 12, 0 )
+
+Title.BackgroundTransparency = 1
+
+Title.Text = "⚡ zhiai Luau Master v4.0"
+
+Title.TextColor3 = Color3.fromRGB( 255, 255, 255 )
+
+Title.Font = Enum.Font.GothamBold
+
+Title.TextSize = 13
+
+Title.TextXAlignment = Enum.TextXAlignment.Left
+
+Title.Parent = TopBar
+
+local function CreateTopButton( text, x )
+
+local button =
+    Instance.new("TextButton")
+
+button.Size =
+    UDim2.fromOffset(
+        26,
+        26
+    )
+
+button.Position =
+    UDim2.new(
+        1,
+        x,
+        0.5,
+        -13
+    )
+
+button.Text =
+    text
+
+button.Font =
+    Enum.Font.GothamBold
+
+button.TextSize =
+    12
+
+button.TextColor3 =
+    Color3.fromRGB(
+        220,
+        220,
+        220
+    )
+
+button.BackgroundColor3 =
+    Color3.fromRGB(
+        42,
+        42,
+        52
+    )
+
+button.Parent =
+    TopBar
+
+Instance.new(
+    "UICorner",
+    button
+).CornerRadius =
+    UDim.new(
+        0,
+        5
+    )
+
+return button
+
+end
+
+local HideBtn = CreateTopButton( "👁", -112 )
+
+local RefreshBtn = CreateTopButton( "↻", -82 )
+
+local ClearBtn = CreateTopButton( "C", -52 )
+
+local CloseBtn = CreateTopButton( "×", -22 )
+
+CloseBtn.TextColor3 = Color3.fromRGB( 255, 90, 90 )
+
+-- ================================================================ -- 消息区域 -- ================================================================
+
+local ScrollFrame = Instance.new("ScrollingFrame")
+
+ScrollFrame.Size = UDim2.new( 1, -20, 1, -92 )
+
+ScrollFrame.Position = UDim2.fromOffset( 10, 44 )
+
+ScrollFrame.BackgroundTransparency = 1
+
+ScrollFrame.BorderSizePixel = 0
+
+ScrollFrame.ScrollBarThickness = 3
+
+ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+ScrollFrame.CanvasSize = UDim2.new( 0, 0, 0, 0 )
+
+ScrollFrame.Parent = Main
+
+local PageLayout = Instance.new( "UIListLayout", ScrollFrame )
+
+PageLayout.Padding = UDim.new( 0, 9 )
+
+PageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+
+PageLayout:GetPropertyChangedSignal( "AbsoluteContentSize" ):Connect( function()
+
+task.defer(
+        function()
+
+            local y =
+                math.max(
+                    0,
+                    PageLayout.AbsoluteContentSize.Y
+                        - ScrollFrame.AbsoluteWindowSize.Y
+                        + 12
+                )
+
+            ScrollFrame.CanvasPosition =
+                Vector2.new(
+                    0,
+                    y
+                )
+        end
+    )
+end
+
+)
+
+-- ================================================================ -- 输入框 -- ================================================================
+
+local InputFrame = Instance.new("Frame")
+
+InputFrame.Size = UDim2.new( 1, -20, 0, 36 )
+
+InputFrame.Position = UDim2.new( 0, 10, 1, -44 )
+
+InputFrame.BackgroundColor3 = Color3.fromRGB( 30, 30, 38 )
+
+InputFrame.BorderSizePixel = 0
+
+InputFrame.Parent = Main
+
+Instance.new( "UICorner", InputFrame ).CornerRadius = UDim.new( 0, 6 )
+
+local ChatInput = Instance.new("TextBox")
+
+ChatInput.Size = UDim2.new( 1, -72, 1, 0 )
+
+ChatInput.Position = UDim2.fromOffset( 10, 0 )
+
+ChatInput.BackgroundTransparency = 1
+
+ChatInput.ClearTextOnFocus = false
+
+ChatInput.MultiLine = true
+
+ChatInput.Text = ""
+
+ChatInput.PlaceholderText = "输入 Luau / zhiUI 需求..."
+
+ChatInput.PlaceholderColor3 = Color3.fromRGB( 120, 120, 135 )
+
+ChatInput.TextColor3 = Color3.fromRGB( 240, 240, 240 )
+
+ChatInput.Font = Enum.Font.Gotham
+
+ChatInput.TextSize = 12
+
+ChatInput.TextXAlignment = Enum.TextXAlignment.Left
+
+ChatInput.Parent = InputFrame
+
+local SendBtn = Instance.new("TextButton")
+
+SendBtn.Size = UDim2.fromOffset( 55, 28 )
+
+SendBtn.Position = UDim2.new( 1, -61, 0.5, -14 )
+
+SendBtn.Text = "发送"
+
+SendBtn.Font = Enum.Font.GothamBold
+
+SendBtn.TextSize = 11
+
+SendBtn.TextColor3 = Color3.fromRGB( 255, 255, 255 )
+
+SendBtn.BackgroundColor3 = Color3.fromRGB( 0, 122, 255 )
+
+SendBtn.Parent = InputFrame
+
+Instance.new( "UICorner", SendBtn ).CornerRadius = UDim.new( 0, 5 )
+
+-- ================================================================ -- 悬浮球 -- ================================================================
+
+local MiniBall = Instance.new("TextButton")
+
+MiniBall.Size = UDim2.fromOffset( 130, 38 )
+
+MiniBall.Position = UDim2.new( 0.5, -65, 0, 15 )
+
+MiniBall.Text = "⚡ zhiai AI"
+
+MiniBall.Font = Enum.Font.GothamBold
+
+MiniBall.TextSize = 12
+
+MiniBall.TextColor3 = Color3.fromRGB( 255, 255, 255 )
+
+MiniBall.BackgroundColor3 = Color3.fromRGB( 20, 20, 25 )
+
+MiniBall.Visible = false
+
+MiniBall.Parent = ScreenGui
+
+Instance.new( "UICorner", MiniBall ).CornerRadius = UDim.new( 1, 0 )
+
+local MiniStroke = Instance.new( "UIStroke", MiniBall )
+
+MiniStroke.Color = Color3.fromRGB( 0, 122, 255 )
+
+MiniStroke.Thickness = 1.2
+
+MakeDraggable( MiniBall, MiniBall )
+
+-- ================================================================ -- UI 显隐 -- ================================================================
+
+local function ToggleUI( visible )
+
+Main.Visible =
+    visible
+
+MiniBall.Visible =
+    not visible
+
+end
+
+HideBtn.MouseButton1Click:Connect( function() ToggleUI(false) end )
+
+MiniBall.MouseButton1Click:Connect( function() ToggleUI(true) end )
+
+CloseBtn.MouseButton1Click:Connect( function() ScreenGui:Destroy() end )
+
+-- ================================================================ -- 消息 -- ================================================================
+
+local function CreateCodeCard( codeContent, parent )
+
+local lineCount =
+    1
+
+for _ in codeContent:gmatch("\n") do
+    lineCount += 1
+end
+
+local height =
+    math.clamp(
+        95 + lineCount * 2,
+        110,
+        420
+    )
+
+local frame =
+    Instance.new("Frame")
+
+frame.Size =
+    UDim2.new(
+        1,
+        0,
+        0,
+        height
+    )
+
+frame.BackgroundColor3 =
+    Color3.fromRGB(
+        11,
+        11,
+        15
+    )
+
+frame.BorderSizePixel =
+    0
+
+frame.Parent =
+    parent
+
+Instance.new(
+    "UICorner",
+    frame
+).CornerRadius =
+    UDim.new(
+        0,
+        6
+    )
+
+local box =
+    Instance.new("TextBox")
+
+box.Size =
+    UDim2.new(
+        1,
+        -12,
+        1,
+        -36
+    )
+
+box.Position =
+    UDim2.fromOffset(
+        6,
+        6
+    )
+
+box.BackgroundTransparency =
+    1
+
+box.ClearTextOnFocus =
+    false
+
+box.MultiLine =
+    true
+
+box.TextEditable =
+    true
+
+box.Text =
+    codeContent
+
+box.TextColor3 =
+    Color3.fromRGB(
+        0,
+        255,
+        127
+    )
+
+box.Font =
+    Enum.Font.Code
+
+box.TextSize =
+    10
+
+box.TextXAlignment =
+    Enum.TextXAlignment.Left
+
+box.TextYAlignment =
+    Enum.TextYAlignment.Top
+
+box.Parent =
+    frame
+
+local copyBtn =
+    Instance.new("TextButton")
+
+copyBtn.Size =
+    UDim2.new(
+        0.48,
+        0,
+        0,
+        24
+    )
+
+copyBtn.Position =
+    UDim2.new(
+        0,
+        6,
+        1,
+        -30
+    )
+
+copyBtn.Text =
+    "📋 复制完整代码"
+
+copyBtn.Font =
+    Enum.Font.GothamBold
+
+copyBtn.TextSize =
+    10
+
+copyBtn.TextColor3 =
+    Color3.fromRGB(
+        255,
+        255,
+        255
+    )
+
+copyBtn.BackgroundColor3 =
+    Color3.fromRGB(
+        45,
+        45,
+        55
+    )
+
+copyBtn.Parent =
+    frame
+
+Instance.new(
+    "UICorner",
+    copyBtn
+).CornerRadius =
+    UDim.new(
+        0,
+        4
+    )
+
+copyBtn.MouseButton1Click:Connect(
+    function()
+
+        if not setclipboard then
+            copyBtn.Text =
+                "当前环境不支持复制"
+            return
+        end
+
+        local success =
+            pcall(
+                function()
+                    setclipboard(codeContent)
+                end
+            )
+
+        if success then
+
+            copyBtn.Text =
+                "✓ 已复制完整代码"
+
+            task.delay(
+                1.5,
+                function()
+
+                    if copyBtn.Parent then
+                        copyBtn.Text =
+                            "📋 复制完整代码"
+                    end
+
+                end
+            )
+
+        else
+            copyBtn.Text =
+                "复制失败"
+        end
+    end
+)
+
+return frame
+
+end
+
+local function AddMessage( text, isUser )
+
+local msgFrame =
+    Instance.new("Frame")
+
+msgFrame.Size =
+    UDim2.new(
+        1,
+        0,
+        0,
+        0
+    )
+
+msgFrame.AutomaticSize =
+    Enum.AutomaticSize.Y
+
+msgFrame.BackgroundTransparency =
+    1
+
+msgFrame.Parent =
+    ScrollFrame
+
+local codeContent =
+    text:match(
+        "```[%w_%-]*\n(.-)```"
+    )
+
+if not codeContent then
+    codeContent =
+        text:match(
+            "```(.-)```"
+        )
+end
+
+local cleanText =
+    text
+
+if codeContent then
+    cleanText =
+        text:gsub(
+            "```[%w_%-]*\n.-```",
+            "💻 代码已放入下方代码卡片"
+        )
+
+    cleanText =
+        cleanText:gsub(
+            "```.-```",
+            "💻 代码已放入下方代码卡片"
+        )
+end
+
+local layout =
+    Instance.new(
+        "UIListLayout",
+        msgFrame
+    )
+
+layout.Padding =
+    UDim.new(
+        0,
+        6
+    )
+
+layout.HorizontalAlignment =
+    isUser
+    and Enum.HorizontalAlignment.Right
+    or Enum.HorizontalAlignment.Left
+
+local bubble =
+    Instance.new("TextLabel")
+
+bubble.Size =
+    UDim2.new(
+        0,
+        math.min(
+            390,
+            math.max(
+                180,
+                #cleanText * 5
+            )
+        ),
+        0,
+        0
+    )
+
+bubble.AutomaticSize =
+    Enum.AutomaticSize.Y
+
+bubble.Text =
+    cleanText
+
+bubble.TextWrapped =
+    true
+
+bubble.BackgroundColor3 =
+    isUser
+    and Color3.fromRGB(
+        0,
+        105,
+        220
+    )
+    or Color3.fromRGB(
+        38,
+        38,
+        48
+    )
+
+bubble.TextColor3 =
+    Color3.fromRGB(
+        240,
+        240,
+        240
+    )
+
+bubble.Font =
+    Enum.Font.Gotham
+
+bubble.TextSize =
+    11
+
+bubble.TextXAlignment =
+    Enum.TextXAlignment.Left
+
+bubble.TextYAlignment =
+    Enum.TextYAlignment.Top
+
+bubble.Parent =
+    msgFrame
+
+Instance.new(
+    "UICorner",
+    bubble
+).CornerRadius =
+    UDim.new(
+        0,
+        6
+    )
+
+local padding =
+    Instance.new(
+        "UIPadding",
+        bubble
+    )
+
+padding.PaddingTop =
+    UDim.new(
+        0,
+        7
+    )
+
+padding.PaddingBottom =
+    UDim.new(
+        0,
+        7
+    )
+
+padding.PaddingLeft =
+    UDim.new(
+        0,
+        9
+    )
+
+padding.PaddingRight =
+    UDim.new(
+        0,
+        9
+    )
+
+if not isUser and codeContent then
+    CreateCodeCard(
+        codeContent,
+        msgFrame
+    )
+end
+
+return msgFrame
+
+end
+
+-- ================================================================ -- 清理聊天 -- ================================================================
+
+ClearBtn.MouseButton1Click:Connect( function()
+
+for _, child in ipairs(
+        ScrollFrame:GetChildren()
+    ) do
+
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+
+    History =
+        {
+            {
+                role = "system",
+                content = SYSTEM_PROMPT
+            }
+        }
+
+    AddMessage(
+        "✓ 对话上下文已清空，Luau Master 已重新初始化。",
+        false
+    )
+end
+
+)
+
+-- ================================================================ -- 刷新上下文 -- ================================================================
+
+RefreshBtn.MouseButton1Click:Connect( function()
+
+AddMessage(
+        "✓ 已重新扫描当前游戏上下文。",
+        false
+    )
+end
+
+)
+
+-- ================================================================ -- 发送 -- ================================================================
+
+local IsProcessing = false
+
+local function SendMessage()
+
+if IsProcessing then
+    return
+end
+
+local userMsg =
+    ChatInput.Text
+
+if not userMsg
+    or userMsg:gsub("%s+", "") == "" then
+    return
+end
+
+ChatInput.Text = ""
+
+IsProcessing =
+    true
+
+SendBtn.Text =
+    "..."
+
+AddMessage(
+    userMsg,
+    true
+)
+
+local loading =
+    AddMessage(
+        "⏳ zhiai Luau Master 正在分析需求、游戏上下文以及 zhiUI 架构...",
+        false
+    )
+
+task.spawn(
+    function()
+
+        local gameContext =
+            ScanGameLogic()
+
+        local prompt =
+            table.concat(
+                {
+                    "【当前游戏上下文】",
+                    gameContext,
+                    "",
+                    "【用户需求】",
+                    userMsg,
+                    "",
+                    "【执行规则】",
+                    "1. 分析需求后再生成代码。",
+                    "2. 涉及 UI 时必须使用 zhiUI。",
+                    "3. 必须按照 zhiUI API 规范生成。",
+                    "4. 不要编造不存在的 zhiUI API。",
+                    "5. 需要游戏对象时必须根据上下文判断。",
+                    "6. 必须处理 nil、连接生命周期以及错误。",
+                    "7. 如果用户要求完整脚本，输出完整脚本。",
+                    "8. 只输出一个 ```lua``` 代码块。",
+                    "9. 不要在代码块外添加解释。"
+                },
+                "\n"
+            )
+
+        table.insert(
+            History,
+            {
+                role = "user",
+                content = prompt
+            }
+        )
+
+        local success, response =
+            pcall(
+                function()
+
+                    return requestFunc(
+                        {
+                            Url =
+                                "https://openrouter.ai/api/v1/chat/completions",
+
+                            Method =
+                                "POST",
+
+                            Headers =
+                                {
+                                    ["Content-Type"] =
+                                        "application/json",
+
+                                    ["Authorization"] =
+                                        "Bearer "
+                                        .. API_KEY
+                                },
+
+                            Body =
+                                HttpService:JSONEncode(
+                                    {
+                                        model =
+                                            "openrouter/free",
+
+                                        messages =
+                                            History
+                                    }
+                                )
+                        }
+                    )
+                end
+            )
+
+        if loading
+            and loading.Parent then
+
+            loading:Destroy()
+        end
+
+        if not success
+            or not response then
+
+            AddMessage(
+                "❌ HTTP 请求失败。",
+                false
+            )
+
+            IsProcessing =
+                false
+
+            SendBtn.Text =
+                "发送"
+
+            return
+        end
+
+        local body =
+            response.Body
+
+        if type(body) ~= "string" then
+
+            AddMessage(
+                "❌ HTTP 返回数据无效。",
+                false
+            )
+
+            IsProcessing =
+                false
+
+            SendBtn.Text =
+                "发送"
+
+            return
+        end
+
+        local decodeSuccess,
+            data =
+            pcall(
+                function()
+                    return HttpService:JSONDecode(
+                        body
+                    )
+                end
+            )
+
+        if not decodeSuccess
+            or type(data) ~= "table" then
+
+            AddMessage(
+                "❌ JSON 解析失败。",
+                false
+            )
+
+            IsProcessing =
+                false
+
+            SendBtn.Text =
+                "发送"
+
+            return
+        end
+
+        local reply
+
+        pcall(
+            function()
+
+                reply =
+                    data
+                    .choices
+                    and data.choices[1]
+                    and data.choices[1].message
+                    and data.choices[1].message.content
+            end
+        )
+
+        if type(reply) ~= "string"
+            or reply == "" then
+
+            local errorText =
+                "❌ AI 没有返回有效内容。"
+
+            if data.error
+                and data.error.message then
+
+                errorText =
+                    errorText
+                    .. "\n"
+                    .. tostring(
+                        data.error.message
+                    )
+            end
+
+            AddMessage(
+                errorText,
+                false
+            )
+
+            IsProcessing =
+                false
+
+            SendBtn.Text =
+                "发送"
+
+            return
+        end
+
+        -- 修正历史：
+        -- 发给 AI 的 prompt 只用于上下文，
+        -- 后续历史保持真实用户消息。
+        History[#History].content =
+            userMsg
+
+        table.insert(
+            History,
+            {
+                role = "assistant",
+                content = reply
+            }
+        )
+
+        AddMessage(
+            reply,
+            false
+        )
+
+        IsProcessing =
+            false
+
+        SendBtn.Text =
+            "发送"
+    end
+)
+
+end
+
+SendBtn.MouseButton1Click:Connect( SendMessage )
+
+ChatInput.FocusLost:Connect( function(enterPressed)
+
+if enterPressed then
+        SendMessage()
+    end
+end
+
+)
+
+-- ================================================================ -- 欢迎 -- ================================================================
+
+AddMessage( "⚡ zhiai Luau Master v4.0\n\n" .. "已加载 Luau 核心知识库。\n" .. "已加载 zhiUI 专业 API 知识。\n" .. "可以直接要求我生成、修复或重构 zhiUI 脚本。", false )
+
+-- ================================================================ -- API Key 设置示例：
+
+-- getgenv().ZHIAI_API_KEY = "你的 API Key"
+
+-- 然后再执行本脚本。
+
+-- 不要把真实 API Key 分享到公开脚本。 -- ================================================================
