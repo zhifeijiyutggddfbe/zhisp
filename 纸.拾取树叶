@@ -1,0 +1,699 @@
+--[[
+Leaf Auto Farm Pro - 已适配 zhiUI 界面库
+版本: 21.1 (zhiUI + 卡顿修复版 + 无表情符号)
+]]
+
+local zhiUI = loadstring(game:HttpGet("https://github.com/yda66722-hash/zhiUI/raw/refs/heads/main/zhiui123"))()
+
+-- ==================== 性能监控系统 ====================
+local Stats = {
+	leavesCollected = 0,
+	totalMoney = 0,
+	sessionTime = 0,
+	startTime = tick(),
+	lastCollectTime = tick(),
+	failureCount = 0,
+	maxFailures = 10,
+}
+
+local function formatNumber(num)
+	if num >= 1000000 then
+		return string.format("%.2fM", num / 1000000)
+	elseif num >= 1000 then
+		return string.format("%.2fK", num / 1000)
+	else
+		return tostring(math.floor(num))
+	end
+end
+
+local function getStats()
+	Stats.sessionTime = tick() - Stats.startTime
+	local rate = Stats.sessionTime > 0 and (Stats.leavesCollected / Stats.sessionTime) or 0
+	return {
+		leaves = formatNumber(Stats.leavesCollected),
+		rate = string.format("%.1f/s", rate),
+		time = string.format("%02d:%02d", math.floor(Stats.sessionTime / 60), math.floor(Stats.sessionTime % 60)),
+		failures = Stats.failureCount
+	}
+end
+
+-- ==================== 日志系统 ====================
+local LogBuffer = {}
+local maxLogs = 50
+
+local function addLog(message)
+	local timestamp = os.date("%H:%M:%S")
+	local logMsg = "[" .. timestamp .. "] " .. message
+	table.insert(LogBuffer, 1, logMsg)
+	if #LogBuffer > maxLogs then
+		table.remove(LogBuffer, maxLogs + 1)
+	end
+end
+
+-- ==================== 核心系统初始化 ====================
+local Window = zhiUI:CreateWindow({
+	Title = "Leaf Auto Farm Pro",
+})
+
+local Tabs = {
+	Main = Window:AddTab("主页"),
+	Statistics = Window:AddTab("统计"),
+	Logs = Window:AddTab("日志"),
+	Advanced = Window:AddTab("高级"),
+	Settings = Window:AddTab("设置"),
+}
+
+-- ==================== Roblox 服务 ====================
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerScripts = LocalPlayer:WaitForChild("PlayerScripts")
+
+local LeafSim = nil
+pcall(function()
+	LeafSim = require(PlayerScripts:WaitForChild("LeafSim", 5))
+end)
+
+-- ==================== 配置参数 ====================
+local sellPos = Vector3.new(53.42, 64.96, -50.39)
+local houseStoragePos = Vector3.new(-85, 65, -50) -- 仓库位置
+
+local autoFarmEnabled = false
+local infiniteBagMode = false
+local useFlyToLeaf = true
+local autoUpgradeBagEnabled = true
+local autoBuyToolsEnabled = true
+local useSmartCollection = true
+local usePathFinding = true
+local isPaused = false
+
+local flySpeed = 80
+local collectionRadius = 15
+local workerThread = nil
+local isSelling = false
+local currentTween = nil
+local lastSellTime = 0
+
+local leafCache = {}
+local leafConnections = {}
+local collectHistory = {} -- 用于检测卡顿
+local maxCollectHistory = 20 -- 防止无限增长
+
+local hrpCache = nil
+
+-- ==================== 防卡机制 ====================
+local function pushCollectHistory()
+	table.insert(collectHistory, 1, tick())
+	if #collectHistory > maxCollectHistory then
+		table.remove(collectHistory, #collectHistory)
+	end
+end
+
+local function detectStuck()
+	-- 出售中不算卡顿：出售流程本身会有一段时间没有新的收集记录
+	if isSelling then
+		return false
+	end
+
+	if #collectHistory > 10 then
+		local recentCollects = 0
+		for i = 1, math.min(10, #collectHistory) do
+			if tick() - collectHistory[i] < 2 then
+				recentCollects += 1
+			end
+		end
+
+		if recentCollects == 0 then
+			addLog("检测到卡顿，正在恢复...")
+			return true
+		end
+	end
+	return false
+end
+
+local function scanAllLeaves() end -- 前向声明，稍后实现覆盖
+
+local function recoveryFromStuck()
+	if currentTween then
+		currentTween:Cancel()
+		currentTween = nil
+	end
+
+	table.clear(collectHistory) -- 修复：清空旧时间戳，避免反复误判为卡死
+	task.wait(0.5)
+	scanAllLeaves()
+	addLog("卡顿恢复完成")
+	Stats.failureCount += 1
+end
+
+-- ==================== 叶子缓存系统 ====================
+local function isValidLeaf(leaf)
+	return leaf and leaf:IsA("BasePart") and leaf.Parent ~= nil and leaf.CanQuery and leaf.Transparency < 0.9
+end
+
+local function addLeafToCache(leaf)
+	if isValidLeaf(leaf) then
+		leafCache[leaf] = tick()
+	end
+end
+
+local function removeLeafFromCache(leaf)
+	leafCache[leaf] = nil
+end
+
+function scanAllLeaves()
+	local leafFolder = Workspace:FindFirstChild("Leaves")
+	if not leafFolder then return end
+
+	local found = 0
+	for _, leaf in ipairs(leafFolder:GetDescendants()) do
+		if isValidLeaf(leaf) then
+			leafCache[leaf] = tick()
+			found += 1
+		end
+	end
+
+	if found > 0 then
+		addLog("扫描完成: 找到 " .. found .. " 片树叶")
+	end
+end
+
+local function setupFolderListeners()
+	for _, conn in ipairs(leafConnections) do
+		conn:Disconnect()
+	end
+	table.clear(leafConnections)
+
+	local leafFolder = Workspace:WaitForChild("Leaves", 10)
+	if leafFolder then
+		leafConnections[#leafConnections + 1] = leafFolder.ChildAdded:Connect(function(child)
+			if child:IsA("BasePart") then
+				addLeafToCache(child)
+			else
+				for _, leaf in ipairs(child:GetDescendants()) do
+					addLeafToCache(leaf)
+				end
+			end
+		end)
+
+		leafConnections[#leafConnections + 1] = leafFolder.DescendantAdded:Connect(addLeafToCache)
+		leafConnections[#leafConnections + 1] = leafFolder.ChildRemoved:Connect(removeLeafFromCache)
+		leafConnections[#leafConnections + 1] = leafFolder.DescendantRemoving:Connect(removeLeafFromCache)
+	end
+end
+
+scanAllLeaves()
+setupFolderListeners()
+
+leafConnections[#leafConnections + 1] = Workspace.ChildAdded:Connect(function(child)
+	if child.Name == "Leaves" then
+		task.wait(0.5)
+		scanAllLeaves()
+		setupFolderListeners()
+		addLog("检测到新的叶子文件夹")
+	end
+end)
+
+-- ==================== 角色缓存 ====================
+local function updateCharacterCache(char)
+	if char then
+		hrpCache = char:WaitForChild("HumanoidRootPart", 5)
+		addLog("角色已重生")
+	else
+		hrpCache = nil
+	end
+end
+
+updateCharacterCache(LocalPlayer.Character)
+leafConnections[#leafConnections + 1] = LocalPlayer.CharacterAdded:Connect(updateCharacterCache)
+
+-- ==================== 购买函数 ====================
+local function buyTool(toolName)
+	pcall(function()
+		ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BuyToolCash"):FireServer(toolName)
+		addLog("购买工具: " .. toolName)
+	end)
+end
+
+local function buyBagUpgrade()
+	pcall(function()
+		ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BuyBagUpgrade"):FireServer()
+		addLog("升级背包")
+	end)
+end
+
+-- ==================== 背包判断 ====================
+local function isBagFull()
+	if infiniteBagMode then return false end
+
+	local leaves = LocalPlayer:GetAttribute("Leaves")
+	local capacity = LocalPlayer:GetAttribute("LeafCapacity")
+
+	if leaves and capacity then
+		return tonumber(leaves) >= tonumber(capacity) * 0.95 -- 95% 时出售
+	end
+
+	return false
+end
+
+local function getBagInfo()
+	local leaves = LocalPlayer:GetAttribute("Leaves") or 0
+	local capacity = LocalPlayer:GetAttribute("LeafCapacity") or 0
+	return leaves, capacity
+end
+
+-- ==================== 飞行系统（改进） ====================
+local function flyTo(position)
+	if not hrpCache or not hrpCache.Parent then return false end
+
+	local distance = (position - hrpCache.Position).Magnitude
+	local duration = math.max(0.1, distance / flySpeed)
+
+	if duration < 0.05 then
+		hrpCache.CFrame = CFrame.new(position)
+		return true
+	end
+
+	if currentTween then
+		currentTween:Cancel()
+		currentTween = nil
+	end
+
+	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+	currentTween = TweenService:Create(hrpCache, tweenInfo, { CFrame = CFrame.new(position) })
+
+	currentTween:Play()
+
+	local success = pcall(function()
+		currentTween.Completed:Wait()
+	end)
+
+	currentTween = nil
+	return success
+end
+
+-- ==================== 智能收集系统 ====================
+local function smartFlyPattern()
+	if not hrpCache then return end
+
+	-- 8字形飞行模式，覆盖更大范围
+	local basePos = hrpCache.Position
+	local pattern = {
+		basePos + Vector3.new(20, 10, 0),
+		basePos + Vector3.new(-20, 10, 0),
+		basePos + Vector3.new(0, 10, 20),
+		basePos + Vector3.new(0, 10, -20),
+	}
+
+	for _, pos in ipairs(pattern) do
+		if autoFarmEnabled and not isSelling then
+			flyTo(pos)
+			task.wait(0.1)
+		end
+	end
+end
+
+-- ==================== 出售系统（改进） ====================
+local function sellLeavesProcess()
+	if isSelling or not autoFarmEnabled then return end
+	isSelling = true
+
+	if currentTween then
+		currentTween:Cancel()
+		currentTween = nil
+	end
+
+	local leaves, capacity = getBagInfo()
+	addLog("开始出售: " .. leaves .. "/" .. capacity)
+
+	flyTo(sellPos)
+	task.wait(0.3)
+
+	pcall(function()
+		ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("EmptyBackpack"):FireServer()
+	end)
+
+	task.wait(0.4)
+
+	if autoUpgradeBagEnabled then
+		buyBagUpgrade()
+		task.wait(0.1)
+	end
+
+	if autoBuyToolsEnabled then
+		buyTool("LeafBlower")
+		task.wait(0.05)
+		buyTool("Rake")
+		task.wait(0.05)
+	end
+
+	table.clear(collectHistory) -- 修复：出售期间没有收集是正常现象，不应触发卡顿检测
+	Stats.leavesCollected += leaves
+	lastSellTime = tick()
+	addLog("出售完成: +" .. leaves .. " 树叶")
+	zhiUI:Notify("出售完成", "+" .. leaves .. " 树叶", 2.5)
+	isSelling = false
+end
+
+local function checkAttributeAndSell()
+	if autoFarmEnabled and not infiniteBagMode and not isSelling then
+		if isBagFull() then
+			task.spawn(sellLeavesProcess)
+		end
+	end
+end
+
+leafConnections[#leafConnections + 1] = LocalPlayer:GetAttributeChangedSignal("Leaves"):Connect(checkAttributeAndSell)
+leafConnections[#leafConnections + 1] = LocalPlayer:GetAttributeChangedSignal("LeafCapacity"):Connect(checkAttributeAndSell)
+
+-- ==================== 寻找最近树叶 ====================
+local function findNearestLeaf()
+	if not hrpCache then return nil, math.huge end
+	local myPos = hrpCache.Position
+	local nearestLeaf = nil
+	local nearestDist = math.huge
+	local toRemove = {}
+
+	for leaf, _ in pairs(leafCache) do
+		if isValidLeaf(leaf) then
+			local dist = (leaf.Position - myPos).Magnitude
+			if dist < nearestDist then
+				nearestDist = dist
+				nearestLeaf = leaf
+			end
+		else
+			table.insert(toRemove, leaf)
+		end
+	end
+
+	for _, leaf in ipairs(toRemove) do
+		leafCache[leaf] = nil
+	end
+
+	if nearestLeaf == nil then
+		scanAllLeaves()
+	end
+
+	return nearestLeaf, nearestDist
+end
+
+-- ==================== 范围收集（改进） ====================
+local function collectNearbyLeaves(radius)
+	if not hrpCache or not LeafSim then return 0 end
+	local myPos = hrpCache.Position
+	local collected = 0
+	local toRemove = {}
+
+	for leaf, _ in pairs(leafCache) do
+		if isValidLeaf(leaf) then
+			if (leaf.Position - myPos).Magnitude <= radius then
+				pcall(function()
+					LeafSim.collect(leaf)
+					table.insert(toRemove, leaf)
+					collected += 1
+					pushCollectHistory() -- 修复：使用带长度限制的写入函数
+
+					if collected % 20 == 0 then
+						task.wait()
+					end
+				end)
+			end
+		else
+			table.insert(toRemove, leaf)
+		end
+	end
+
+	for _, leaf in ipairs(toRemove) do
+		leafCache[leaf] = nil
+	end
+
+	return collected
+end
+
+-- ==================== 主循环系统 ====================
+local function startMainAutoLoop()
+	if autoFarmEnabled then return end
+	autoFarmEnabled = true
+	isPaused = false
+	isSelling = false
+	Stats.startTime = tick()
+	Stats.leavesCollected = 0
+	table.clear(collectHistory)
+
+	addLog("启动自动挂机...")
+	checkAttributeAndSell()
+
+	workerThread = task.spawn(function()
+		while autoFarmEnabled do
+			if isPaused then
+				task.wait(0.5)
+				continue
+			end
+
+			if detectStuck() then
+				recoveryFromStuck()
+				continue
+			end
+
+			if isSelling then
+				task.wait(0.2)
+				continue
+			end
+
+			if isBagFull() then
+				sellLeavesProcess()
+				task.wait(0.2)
+				continue
+			end
+
+			if useFlyToLeaf then
+				local nearestLeaf, dist = findNearestLeaf()
+				if nearestLeaf then
+					flyTo(nearestLeaf.Position + Vector3.new(0, 3, 0))
+
+					if not isSelling then
+						local collected = collectNearbyLeaves(collectionRadius)
+						if collected == 0 and useSmartCollection then
+							smartFlyPattern()
+						end
+					end
+					task.wait(0.05)
+				else
+					scanAllLeaves()
+					if useSmartCollection then
+						smartFlyPattern()
+					end
+					task.wait(0.3)
+				end
+			else
+				local processed = 0
+				local toRemove = {}
+
+				for leaf, _ in pairs(leafCache) do
+					if not autoFarmEnabled or isSelling or isPaused then break end
+					if isValidLeaf(leaf) then
+						pcall(function()
+							LeafSim.collect(leaf)
+							pushCollectHistory() -- 修复：使用带长度限制的写入函数
+						end)
+						table.insert(toRemove, leaf)
+						processed += 1
+
+						if processed >= 30 then
+							processed = 0
+							task.wait()
+						end
+					else
+						table.insert(toRemove, leaf)
+					end
+				end
+
+				for _, leaf in ipairs(toRemove) do
+					leafCache[leaf] = nil
+				end
+
+				if processed == 0 then
+					scanAllLeaves()
+				end
+
+				task.wait(0.05)
+			end
+		end
+	end)
+end
+
+local function stopMainAutoLoop()
+	autoFarmEnabled = false
+	isPaused = false
+	isSelling = false
+
+	if currentTween then
+		currentTween:Cancel()
+		currentTween = nil
+	end
+
+	if workerThread then
+		task.cancel(workerThread)
+		workerThread = nil
+	end
+
+	addLog("已停止自动挂机")
+end
+
+-- ==================== UI 界面（zhiUI） ====================
+
+-- ========== 主页 ==========
+local MainPage = Tabs.Main
+
+MainPage:AddToggle("开启全自动挂机", false, function(v)
+	if v then
+		startMainAutoLoop()
+	else
+		stopMainAutoLoop()
+	end
+end)
+
+MainPage:AddToggle("暂停/继续", false, function(v)
+	isPaused = v
+	if v then
+		addLog("已暂停")
+	else
+		addLog("已继续")
+	end
+end)
+
+MainPage:AddToggle("无限背包模式", false, function(v)
+	infiniteBagMode = v
+end)
+
+MainPage:AddToggle("自动飞行至树叶", true, function(v)
+	useFlyToLeaf = v
+end)
+
+MainPage:AddToggle("智能收集模式", true, function(v)
+	useSmartCollection = v
+end)
+
+MainPage:AddDivider()
+
+MainPage:AddToggle("自动购买工具", true, function(v)
+	autoBuyToolsEnabled = v
+end)
+
+MainPage:AddButton("购买吹风筒", function()
+	buyTool("LeafBlower")
+end)
+
+MainPage:AddButton("购买扫把", function()
+	buyTool("Rake")
+end)
+
+MainPage:AddDivider()
+
+MainPage:AddToggle("自动升级背包", true, function(v)
+	autoUpgradeBagEnabled = v
+end)
+
+MainPage:AddButton("手动升级一次", function()
+	buyBagUpgrade()
+end)
+
+MainPage:AddDivider()
+
+MainPage:AddButton("强制重置卡死", function()
+	recoveryFromStuck()
+end)
+
+MainPage:AddButton("强制去卖树叶", function()
+	task.spawn(sellLeavesProcess)
+end)
+
+MainPage:AddButton("重新扫描地图", function()
+	scanAllLeaves()
+end)
+
+-- ========== 统计 ==========
+local StatsPage = Tabs.Statistics
+local StatLabel = StatsPage:AddLabel("加载中...")
+
+task.spawn(function()
+	while true do
+		local data = getStats()
+		local leaves, capacity = getBagInfo()
+		StatLabel:Set(
+			"收集总数: " .. data.leaves .. "\n" ..
+			"收集速率: " .. data.rate .. "\n" ..
+			"运行时间: " .. data.time .. "\n" ..
+			"背包: " .. leaves .. "/" .. capacity .. "\n" ..
+			"卡顿次数: " .. data.failures .. "\n" ..
+			"缓存叶子: " .. table.maxn(leafCache)
+		)
+		task.wait(0.5)
+	end
+end)
+
+-- ========== 日志 ==========
+local LogPage = Tabs.Logs
+local LogLabel = LogPage:AddLabel("开始日志...")
+
+task.spawn(function()
+	while true do
+		local logText = table.concat(LogBuffer, "\n")
+		if logText == "" then logText = "暂无日志" end
+		LogLabel:Set(logText)
+		task.wait(1)
+	end
+end)
+
+LogPage:AddButton("清空日志", function()
+	table.clear(LogBuffer)
+	addLog("日志已清空")
+end)
+
+-- ========== 高级 ==========
+local AdvPage = Tabs.Advanced
+
+AdvPage:AddSlider("飞行速度", 30, 300, 80, function(value)
+	flySpeed = value
+	addLog("飞行速度已更改: " .. value)
+end)
+
+AdvPage:AddSlider("收集范围", 5, 50, 15, function(value)
+	collectionRadius = value
+end)
+
+AdvPage:AddButton("记录当前位置为出售点", function()
+	if hrpCache then
+		sellPos = hrpCache.Position
+		addLog("出售点已更新: " .. string.format("%.1f, %.1f, %.1f", sellPos.X, sellPos.Y, sellPos.Z))
+		zhiUI:Notify("出售点已更新", string.format("%.1f, %.1f, %.1f", sellPos.X, sellPos.Y, sellPos.Z), 2)
+	end
+end)
+
+AdvPage:AddButton("设置为家庭仓库", function()
+	if hrpCache then
+		houseStoragePos = hrpCache.Position
+		addLog("仓库位置已更新")
+	end
+end)
+
+-- ========== 设置 ==========
+local SettingsPage = Tabs.Settings
+
+SettingsPage:AddLabel("提示: 点击窗口左上角红色按钮可直接关闭界面")
+
+SettingsPage:AddButton("卸载脚本 (停止挂机+断开监听)", function()
+	stopMainAutoLoop()
+	for _, conn in ipairs(leafConnections) do
+		conn:Disconnect()
+	end
+	addLog("脚本逻辑已卸载，可点击左上角红点关闭界面")
+	zhiUI:Notify("已卸载", "脚本逻辑已停止，可关闭界面", 3)
+end)
+
+addLog("脚本加载完成！")
+zhiUI:Notify("加载完成", "Leaf Auto Farm Pro 已就绪", 3)
