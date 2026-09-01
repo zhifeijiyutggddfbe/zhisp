@@ -201,9 +201,9 @@ ExclusiveTab:AddButton("加载 纸.监狱人生", function()
     end)
 end)
 
-ExclusiveTab:AddButton("加载 纸.ohio", function()
+ExclusiveTab:AddButton("加载 纸.拾取树叶", function()
     pcall(function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.ohio"))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.%E6%8B%BE%E5%8F%96%E6%A0%91%E5%8F%B6"))()
     end)
 end)
 
