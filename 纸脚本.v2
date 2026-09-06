@@ -35,7 +35,7 @@ WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
 ]]--
 
 pcall(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.antihttpspy"))()
+    loadstring(game:HttpGet("https://pastebin.com/raw/TjEmENKa"))()
 end)
 
 local Players = game:GetService("Players")
@@ -235,6 +235,12 @@ end)
 ExclusiveTab:AddButton("加载 纸.拾取树叶", function()
     pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.%E6%8B%BE%E5%8F%96%E6%A0%91%E5%8F%B6"))()
+    end)
+end)
+
+ExclusiveTab:AddButton("加载 纸.重型钓鱼", function()
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.%E9%87%8D%E5%9E%8B%E9%92%93%E9%B1%BC"))()
     end)
 end)
 
