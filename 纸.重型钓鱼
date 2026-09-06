@@ -1,0 +1,206 @@
+-- 1. 远程加载 zhiUI 库
+local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
+
+-- 2. 服务与变量定义
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+local Events = ReplicatedStorage:WaitForChild("Events")
+local FishingEvent = Events:WaitForChild("Fishing")
+local UseSkillEvent = Events:WaitForChild("UseSkill")
+local MainGui = LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("MainGui")
+
+-- 全局控制开关与设置
+_G.AutoFishing = false
+_G.AutoSkills = false
+_G.SelectedSkills = {
+    ["Z"] = true,
+    ["X"] = true,
+    ["C"] = true,
+    ["V"] = true
+}
+
+local hasCast = false
+
+-- 3. 核心辅助函数与工具函数
+local function isFishingGuiVisible()
+    local fishingGui = MainGui:FindFirstChild("Fishing")
+    return fishingGui and fishingGui.Visible
+end
+
+local function isFishing()
+    if Character and Character:GetAttribute("Fishing") then
+        return not Character:GetAttribute("Retractable")
+    end
+    return false
+end
+
+-- 3.1 一键出售全部鱼
+local function SellAllFish()
+    local sellEvent = Events:FindFirstChild("SellFish")
+    if sellEvent then
+        sellEvent:FireServer("All")
+    end
+end
+
+-- 3.2 一键传送至 NPC 圣人易九
+local function TeleportToSageYijiu()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local npc = workspace:FindFirstChild("NPC")
+    
+    if npc and hrp then
+        local sageYijiu = npc:FindFirstChild("LearnSkill") and npc.LearnSkill:FindFirstChild("Sage Yijiu")
+        if sageYijiu then
+            local targetCFrame = sageYijiu:FindFirstChild("HumanoidRootPart") and sageYijiu.HumanoidRootPart.CFrame or sageYijiu:GetPivot()
+            hrp.CFrame = targetCFrame + Vector3.new(0, 3, 5)
+        end
+    end
+end
+
+-- 4. 事件监听与角色重载
+if MainGui:FindFirstChild("Fishing") then
+    MainGui.Fishing:GetPropertyChangedSignal("Visible"):Connect(function()
+        hasCast = isFishingGuiVisible()
+    end)
+end
+
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    Character = newCharacter
+    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+    hasCast = false
+end)
+
+-- 5. 钓鱼后台循环与响应逻辑
+
+-- 5.1 自动抛竿
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if _G.AutoFishing and not isFishingGuiVisible() and not isFishing() then
+            if not hasCast then
+                hasCast = true
+                FishingEvent:FireServer(HumanoidRootPart.CFrame)
+            end
+        end
+    end
+end)
+
+-- 5.2 自动锁定绿条位置
+task.spawn(function()
+    while true do
+        task.wait(0.01)
+        if _G.AutoFishing and isFishingGuiVisible() then
+            local fishingGui = MainGui:FindFirstChild("Fishing")
+            if fishingGui and fishingGui.Visible then
+                local bar = fishingGui:FindFirstChild("BarFrame") and fishingGui.BarFrame:FindFirstChild("Bar")
+                if bar then
+                    pcall(function()
+                        bar.Position = UDim2.new(0.5, 0, bar.Position.Y.Scale, bar.Position.Y.Offset)
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+-- 5.3 Slam (重击 QTE) 响应
+if Events:FindFirstChild("Slam") then
+    Events.Slam.OnClientEvent:Connect(function()
+        if not _G.AutoFishing then return end
+        task.spawn(function()
+            local start = tick()
+            while tick() - start < 2 do
+                local fishingGui = MainGui:FindFirstChild("Fishing")
+                local trashCan = fishingGui and fishingGui:FindFirstChild("TrashCan")
+                local slamBtn = trashCan and trashCan:FindFirstChild("Slam")
+                
+                if slamBtn and slamBtn:FindFirstChild("Button") and slamBtn.Button:FindFirstChild("Line") then
+                    if slamBtn.Button.Line.Size.X.Scale < 1.15 then
+                        task.wait(0.05)
+                        pcall(function() slamBtn.Button.MouseButton1Click:Fire() end)
+                        return
+                    end
+                end
+                task.wait(0.03)
+            end
+        end)
+    end)
+end
+
+-- 5.4 Charge (蓄力 QTE) 响应
+if Events:FindFirstChild("Charge") then
+    Events.Charge.OnClientEvent:Connect(function()
+        if not _G.AutoFishing then return end
+        task.wait(0.1)
+        local fishingGui = MainGui:FindFirstChild("Fishing")
+        local trashCan = fishingGui and fishingGui:FindFirstChild("TrashCan")
+        local chargeBtn = trashCan and trashCan:FindFirstChild("Charge")
+        if chargeBtn and chargeBtn:FindFirstChild("Button") then
+            pcall(function() chargeBtn.Button.MouseButton1Click:Fire() end)
+        end
+    end)
+end
+
+-- 5.5 自动释放技能循环
+task.spawn(function()
+    while true do
+        task.wait(1)
+        local fishingGui = MainGui:FindFirstChild("Fishing")
+        
+        if _G.AutoSkills and fishingGui and fishingGui.Visible then
+            for skill, enabled in pairs(_G.SelectedSkills) do
+                if enabled then
+                    UseSkillEvent:FireServer(skill)
+                    task.wait(0.1)
+                end
+            end
+        end
+    end
+end)
+
+-- 6. 构建 UI 界面
+local Window = zhiUI:CreateWindow({
+    Title = "纸.重型钓鱼"
+})
+
+-- 分页 1：重型钓鱼
+local MainTab = Window:AddTab("重型钓鱼")
+
+MainTab:AddToggle("自动钓鱼 (Auto Fishing)", false, function(state)
+    _G.AutoFishing = state
+end)
+
+MainTab:AddToggle("自动释放技能 (Auto Skills)", false, function(state)
+    _G.AutoSkills = state
+end)
+
+MainTab:AddToggle("释放 Z 技能", true, function(state)
+    _G.SelectedSkills["Z"] = state
+end)
+
+MainTab:AddToggle("释放 X 技能", true, function(state)
+    _G.SelectedSkills["X"] = state
+end)
+
+MainTab:AddToggle("释放 C 技能", true, function(state)
+    _G.SelectedSkills["C"] = state
+end)
+
+MainTab:AddToggle("释放 V 技能", true, function(state)
+    _G.SelectedSkills["V"] = state
+end)
+
+-- 分页 2：快捷工具
+local UtilityTab = Window:AddTab("快捷工具")
+
+UtilityTab:AddButton("一键出售全部鱼", function()
+    SellAllFish()
+end)
+
+UtilityTab:AddButton("传送至 NPC 圣人易九", function()
+    TeleportToSageYijiu()
+end)
