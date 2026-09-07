@@ -163,7 +163,7 @@ local Window = zhiUI:CreateWindow({
     Title = "纸.重型钓鱼"
 })
 
--- 分页 1：重型钓鱼
+-- 分页 1：钓鱼
 local MainTab = Window:AddTab("钓鱼")
 
 MainTab:AddToggle("自动钓鱼 (Auto Fishing)", false, function(state)
@@ -190,7 +190,7 @@ MainTab:AddToggle("释放 V 技能", true, function(state)
     _G.SelectedSkills["V"] = state
 end)
 
--- 分页 2：快捷工具
+-- 分页 2：面板
 local UtilityTab = Window:AddTab("面板")
 
 -- 鱼类与商店操作
@@ -240,5 +240,9 @@ UtilityTab:AddButton("传送老江【NPC】", function()
 end)
 
 UtilityTab:AddButton("传送圣人易九【NPC】", function()
-    TeleportToPos(0, 3, 5)
+    TeleportToPos(-120.45, 6.76, 40.20)
+end)
+
+UtilityTab:AddButton("传送寻票任务【NPC】", function()
+    TeleportToPos(-150.10, 7.57, 91.52)
 end)
