@@ -1,0 +1,76 @@
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local Terrain = Workspace:FindFirstChildOfClass("Terrain")
+local Stats = game:GetService("Stats")
+
+pcall(function()
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 9e9
+    Lighting.Brightness = 1
+    Lighting.Technology = Enum.Technology.Compatibility
+
+    for _, item in ipairs(Lighting:GetChildren()) do
+        if item:IsA("PostEffect") or item:IsA("BlurEffect") or item:IsA("SunRaysEffect") or item:IsA("BloomEffect") or item:IsA("DepthOfFieldEffect") then
+            item.Enabled = false
+        end
+    end
+end)
+
+if Terrain then
+    pcall(function()
+        Terrain.WaterWaveSize = 0
+        Terrain.WaterWaveSpeed = 0
+        Terrain.WaterReflectance = 0
+        Terrain.WaterTransparency = 0
+        Terrain.Decoration = false
+    end)
+end
+
+local function optimizePart(inst)
+    pcall(function()
+        if inst:IsA("BasePart") then
+            inst.Material = Enum.Material.SmoothPlastic
+            inst.Reflectance = 0
+            inst.CastShadow = false
+        elseif inst:IsA("Decal") or inst:IsA("Texture") then
+            inst.Transparent = 1
+        elseif inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Smoke") or inst:IsA("Fire") or inst:IsA("Sparkles") then
+            inst.Enabled = false
+        elseif inst:IsA("MeshPart") then
+            inst.Material = Enum.Material.SmoothPlastic
+            inst.Reflectance = 0
+            inst.CastShadow = false
+        end
+    end)
+end
+
+local allDescendants = Workspace:GetDescendants()
+local totalItems = #allDescendants
+local batchSize = 150 
+
+task.spawn(function()
+    for i = 1, totalItems do
+        optimizePart(allDescendants[i])
+        
+        if i % batchSize == 0 then
+            task.wait() 
+        end
+    end
+end)
+
+local conn
+conn = Workspace.DescendantAdded:Connect(function(val)
+    task.spawn(function()
+        optimizePart(val)
+    end)
+end)
+
+task.spawn(function()
+    while task.wait(30) do
+        collectgarbage("collect")
+    end
+end)
