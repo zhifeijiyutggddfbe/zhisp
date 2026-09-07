@@ -239,6 +239,6 @@ UtilityTab:AddButton("传送老江【NPC】", function()
     TeleportToPos(1536, 47.58, -77.06)
 end)
 
-UtilityTab:AddButton("传送圣人易九【npc】", function()
-    TeleportToPos(1536, 47.58, -77.06)
+UtilityTab:AddButton("传送圣人易九【NPC】", function()
+    TeleportToPos(0, 3, 5)
 end)
