@@ -11,6 +11,8 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 local Events = ReplicatedStorage:WaitForChild("Events")
 local FishingEvent = Events:WaitForChild("Fishing")
 local UseSkillEvent = Events:WaitForChild("UseSkill")
+local DialogueEvent = Events:WaitForChild("ChooseDialogueOption")
+local BuyRodEvent = Events:WaitForChild("BuyFishingRod")
 local MainGui = LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("MainGui")
 
 -- 全局控制开关与设置
@@ -38,26 +40,20 @@ local function isFishing()
     return false
 end
 
--- 3.1 一键出售全部鱼
+-- 传送函数
+local function TeleportToPos(x, y, z)
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.CFrame = CFrame.new(x, y, z)
+    end
+end
+
+-- 一键出售全部鱼
 local function SellAllFish()
     local sellEvent = Events:FindFirstChild("SellFish")
     if sellEvent then
         sellEvent:FireServer("All")
-    end
-end
-
--- 3.2 一键传送至 NPC 圣人易九
-local function TeleportToSageYijiu()
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local npc = workspace:FindFirstChild("NPC")
-    
-    if npc and hrp then
-        local sageYijiu = npc:FindFirstChild("LearnSkill") and npc.LearnSkill:FindFirstChild("Sage Yijiu")
-        if sageYijiu then
-            local targetCFrame = sageYijiu:FindFirstChild("HumanoidRootPart") and sageYijiu.HumanoidRootPart.CFrame or sageYijiu:GetPivot()
-            hrp.CFrame = targetCFrame + Vector3.new(0, 3, 5)
-        end
     end
 end
 
@@ -168,7 +164,7 @@ local Window = zhiUI:CreateWindow({
 })
 
 -- 分页 1：重型钓鱼
-local MainTab = Window:AddTab("重型钓鱼")
+local MainTab = Window:AddTab("钓鱼")
 
 MainTab:AddToggle("自动钓鱼 (Auto Fishing)", false, function(state)
     _G.AutoFishing = state
@@ -195,12 +191,54 @@ MainTab:AddToggle("释放 V 技能", true, function(state)
 end)
 
 -- 分页 2：快捷工具
-local UtilityTab = Window:AddTab("快捷工具")
+local UtilityTab = Window:AddTab("面板")
 
+-- 鱼类与商店操作
 UtilityTab:AddButton("一键出售全部鱼", function()
     SellAllFish()
 end)
 
-UtilityTab:AddButton("传送至 NPC 圣人易九", function()
-    TeleportToSageYijiu()
+UtilityTab:AddButton("打开购买鱼竿面板", function()
+    DialogueEvent:FireServer("BuyFishingRod", 1, "BuyRod")
+end)
+
+UtilityTab:AddButton("打开制造鱼竿面板", function()
+    DialogueEvent:FireServer("BuyFishingRod", 2, "CraftRod")
+end)
+
+UtilityTab:AddButton("打开购买诱饵面板", function()
+    DialogueEvent:FireServer("BuyBait", 1, "BaitShop")
+end)
+
+UtilityTab:AddButton("打开制造诱饵面板", function()
+    DialogueEvent:FireServer("BuyBait", 2, "CraftBait")
+end)
+
+UtilityTab:AddButton("购买克拉肯干钓竿", function()
+    BuyRodEvent:FireServer("Kraken Rod")
+end)
+
+-- 位置与 NPC 传送
+UtilityTab:AddButton("传送核弹岛", function()
+    TeleportToPos(76.44, 9.28, 1268.03)
+end)
+
+UtilityTab:AddButton("传送曾天国【NPC】", function()
+    TeleportToPos(147.20, 6.76, 1370.38)
+end)
+
+UtilityTab:AddButton("传送琥珀岛", function()
+    TeleportToPos(1462.48, 9.28, 1219.10)
+end)
+
+UtilityTab:AddButton("传送战争岛", function()
+    TeleportToPos(1247.79, 19.56, 52.70)
+end)
+
+UtilityTab:AddButton("传送老江【NPC】", function()
+    TeleportToPos(1536, 47.58, -77.06)
+end)
+
+UtilityTab:AddButton("传送圣人易九【npc】", function()
+    TeleportToPos(1536, 47.58, -77.06)
 end)
