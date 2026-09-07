@@ -1,48 +1,61 @@
 -- =========================================================
--- 高效流畅版 Anti-HttpSpy (反抓包 & Hook 监测)
--- 特点：零卡顿、低 CPU 占用、暗中保护，不影响主线程帧率
+-- 秒踢版 Anti-HttpSpy (检测到直接 Kick 玩家)
+-- 特点：零卡顿、极低 CPU 占用、检测即瞬间踢出
 -- =========================================================
 
-local task = task
-local string = string
-local debug = debug
-local pcall = pcall
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
 
--- 1. 核心防护：直接在最底层重定向/保护网络请求 API，防止 Hook
-local raw_request = (syn and syn.request) or (http and http.request) or request or HttpPost
-local raw_httpget = game.HttpGet
-
--- 预先锁定敏感关键字（HttpSpy 常见的伪造代理或抓包 Hook 标识）
-local SpyKeywords = {
-    "httpspy", "spy", "http_spy", "httplogger", "hookfunction", "requesthook"
-}
-
--- 2. 内存暗中校验（低频轮询，绝对不卡顿）
-local function StartLightAntiSpy()
-    task.spawn(function()
-        while true do
-            -- ⏳ 关键：每 3 ~ 5 秒才检测一次，极大降低 CPU 负担
-            task.wait(3.5)
-
-            pcall(function()
-                -- 检查常见的 HttpSpy UI 或 CoreGui 挂载点
-                local CoreGui = game:GetService("CoreGui")
-                for _, child in ipairs(CoreGui:GetChildren()) do
-                    local name = string.lower(child.Name)
-                    for _, kw in ipairs(SpyKeywords) do
-                        if string.find(name, kw) then
-                            -- 发现 HttpSpy 界面，优雅地终止/崩溃或断开连接
-                            game:GetService("Players").LocalPlayer:Kick("Security Violation Detected.")
-                            return
-                        end
-                    end
-                end
-            end)
-        end
+-- 1. Kick 执行函数 (附带明确提示)
+local function KickPlayer(reason)
+    pcall(function()
+        LocalPlayer:Kick("\n[安全系统告警]\n检测到非法抓包/调试工具 (" .. (reason or "HttpSpy") .. ")\n请关闭抓包工具后重新进入游戏。")
     end)
+    -- 强制中断当前脚本线程，防止后续代码继续被窃取
+    task.wait(9e9)
 end
 
--- 启动隐匿保护
-StartLightAntiSpy()
+-- 2. HttpSpy 常见 UI / 标识关键字匹配表
+local SpyKeywords = {
+    "httpspy", "http_spy", "httplogger", "spy", 
+    "reqhook", "hookfunction", "packetlog"
+}
 
-print("[Security]: 优化版 Anti-HttpSpy 已成功启用（流畅无感）。")
+-- 3. 暗中巡逻线程 (3秒一次，完全不卡顿)
+task.spawn(function()
+    while true do
+        task.wait(3) -- ⏳ 3秒检测一次，掉帧率彻底为 0
+
+        pcall(function()
+            -- A. 检查 CoreGui 界面层（HttpSpy 界面通常挂载在这里）
+            for _, child in ipairs(CoreGui:GetChildren()) do
+                local name = string.lower(child.Name)
+                for _, kw in ipairs(SpyKeywords) do
+                    if string.find(name, kw) then
+                        KickPlayer("HttpSpy UI: " .. child.Name)
+                        return
+                    end
+                end
+            end
+
+            -- B. 检查全局环境标识 (HttpSpy 注入时留下的全局变量)
+            if getgenv then
+                local genv = getgenv()
+                if genv.HttpSpy or genv.SpyInstalled or genv.HookedRequests or genv.httpspy then
+                    KickPlayer("HttpSpy Environment Variable")
+                    return
+                end
+            end
+            
+            -- C. 检查 Hook 签名（防止 game.HttpGet 被替换）
+            local httpGetStr = tostring(game.HttpGet)
+            if not string.find(httpGetStr, "HttpGet") and not string.find(httpGetStr, "function") then
+                KickPlayer("HttpGet Hooked")
+                return
+            end
+        end)
+    end
+end)
+
+print("[Security]: 强力秒踢版 Anti-HttpSpy 已成功加载（流畅无感）。")
