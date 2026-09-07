@@ -1,7 +1,5 @@
--- 1. 远程加载 zhiUI 库
 local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
 
--- 2. 服务与变量定义
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
@@ -15,7 +13,6 @@ local DialogueEvent = Events:WaitForChild("ChooseDialogueOption")
 local BuyRodEvent = Events:WaitForChild("BuyFishingRod")
 local MainGui = LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("MainGui")
 
--- 全局控制开关与设置
 _G.AutoFishing = false
 _G.AutoSkills = false
 _G.SelectedSkills = {
@@ -27,7 +24,6 @@ _G.SelectedSkills = {
 
 local hasCast = false
 
--- 3. 核心辅助函数与工具函数
 local function isFishingGuiVisible()
     local fishingGui = MainGui:FindFirstChild("Fishing")
     return fishingGui and fishingGui.Visible
@@ -40,7 +36,6 @@ local function isFishing()
     return false
 end
 
--- 传送函数
 local function TeleportToPos(x, y, z)
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -49,7 +44,6 @@ local function TeleportToPos(x, y, z)
     end
 end
 
--- 一键出售全部鱼
 local function SellAllFish()
     local sellEvent = Events:FindFirstChild("SellFish")
     if sellEvent then
@@ -57,7 +51,6 @@ local function SellAllFish()
     end
 end
 
--- 4. 事件监听与角色重载
 if MainGui:FindFirstChild("Fishing") then
     MainGui.Fishing:GetPropertyChangedSignal("Visible"):Connect(function()
         hasCast = isFishingGuiVisible()
@@ -70,9 +63,6 @@ LocalPlayer.CharacterAdded:Connect(function(newCharacter)
     hasCast = false
 end)
 
--- 5. 钓鱼后台循环与响应逻辑
-
--- 5.1 自动抛竿
 task.spawn(function()
     while true do
         task.wait(0.5)
@@ -85,7 +75,6 @@ task.spawn(function()
     end
 end)
 
--- 5.2 自动锁定绿条位置
 task.spawn(function()
     while true do
         task.wait(0.01)
@@ -103,7 +92,6 @@ task.spawn(function()
     end
 end)
 
--- 5.3 Slam (重击 QTE) 响应
 if Events:FindFirstChild("Slam") then
     Events.Slam.OnClientEvent:Connect(function()
         if not _G.AutoFishing then return end
@@ -127,7 +115,6 @@ if Events:FindFirstChild("Slam") then
     end)
 end
 
--- 5.4 Charge (蓄力 QTE) 响应
 if Events:FindFirstChild("Charge") then
     Events.Charge.OnClientEvent:Connect(function()
         if not _G.AutoFishing then return end
@@ -141,7 +128,6 @@ if Events:FindFirstChild("Charge") then
     end)
 end
 
--- 5.5 自动释放技能循环
 task.spawn(function()
     while true do
         task.wait(1)
@@ -158,91 +144,101 @@ task.spawn(function()
     end
 end)
 
--- 6. 构建 UI 界面
 local Window = zhiUI:CreateWindow({
     Title = "纸.重型钓鱼"
 })
 
--- 分页 1：钓鱼
 local MainTab = Window:AddTab("钓鱼")
 
-MainTab:AddToggle("自动钓鱼 (Auto Fishing)", false, function(state)
+MainTab:AddToggle("自动钓鱼", false, function(state)
     _G.AutoFishing = state
 end)
 
-MainTab:AddToggle("自动释放技能 (Auto Skills)", false, function(state)
+MainTab:AddToggle("自动释放技能", false, function(state)
     _G.AutoSkills = state
 end)
 
-MainTab:AddToggle("释放 Z 技能", true, function(state)
+MainTab:AddToggle("释放Z技能", true, function(state)
     _G.SelectedSkills["Z"] = state
 end)
 
-MainTab:AddToggle("释放 X 技能", true, function(state)
+MainTab:AddToggle("释放X技能", true, function(state)
     _G.SelectedSkills["X"] = state
 end)
 
-MainTab:AddToggle("释放 C 技能", true, function(state)
+MainTab:AddToggle("释放C技能", true, function(state)
     _G.SelectedSkills["C"] = state
 end)
 
-MainTab:AddToggle("释放 V 技能", true, function(state)
+MainTab:AddToggle("释放V技能", true, function(state)
     _G.SelectedSkills["V"] = state
 end)
 
--- 分页 2：面板
+local TeleportTab = Window:AddTab("传送")
+
+TeleportTab:AddDropdown("传送岛屿", {
+    "核弹岛",
+    "琥珀岛",
+    "战争岛",
+    "椰子岛",
+    "迷雾峰岛",
+    "初始岛屿"  
+}, function(selected)
+    local coords = {
+        ["核弹岛"] = {76.44, 9.28, 1268.03},
+        ["琥珀岛"] = {1462.48, 9.28, 1219.10},
+        ["战争岛"] = {1247.79, 19.56, 52.70},
+        ["椰子岛"] = {1424.12, 9.28, -1356.40},
+        ["迷雾峰岛"] = {2546.80, 9.28, -82.09},
+        ["初始岛屿"] = {-99.43, 9.28, 235.73}  
+    }
+    local pos = coords[selected]
+    if pos then TeleportToPos(pos[1], pos[2], pos[3]) end
+end)
+
+TeleportTab:AddDropdown("传送NPC", {
+    "曾天国【NPC】",
+    "老江【NPC】",
+    "圣人易九【NPC】",
+    "寻票任务【NPC】",
+    "Duan Gun【NPC】",
+    "圣人易九（战争岛）【NPC】",
+    "北冥【NPC】"
+}, function(selected)
+    local coords = {
+        ["曾天国【NPC】"] = {147.20, 6.76, 1370.38},
+        ["老江【NPC】"] = {1536, 47.58, -77.06},
+        ["圣人易九【NPC】"] = {-120.45, 6.76, 40.20},
+        ["寻票任务【NPC】"] = {-150.10, 7.57, 91.52},
+        ["Duan Gun【NPC】"] = {1416.95, 8.16, 176.14},
+        ["圣人易九（战争岛）【NPC】"] = {1334.40, 9.28, 230.44},
+        ["北冥【NPC】"] = {1510.03, 108.96, -1564.98}
+    }
+    local pos = coords[selected]
+    if pos then TeleportToPos(pos[1], pos[2], pos[3]) end
+end)
+
 local UtilityTab = Window:AddTab("面板")
 
--- 鱼类与商店操作
-UtilityTab:AddButton("一键出售全部鱼", function()
-    SellAllFish()
-end)
-
-UtilityTab:AddButton("打开购买鱼竿面板", function()
-    DialogueEvent:FireServer("BuyFishingRod", 1, "BuyRod")
-end)
-
-UtilityTab:AddButton("打开制造鱼竿面板", function()
-    DialogueEvent:FireServer("BuyFishingRod", 2, "CraftRod")
-end)
-
-UtilityTab:AddButton("打开购买诱饵面板", function()
-    DialogueEvent:FireServer("BuyBait", 1, "BaitShop")
-end)
-
-UtilityTab:AddButton("打开制造诱饵面板", function()
-    DialogueEvent:FireServer("BuyBait", 2, "CraftBait")
-end)
-
-UtilityTab:AddButton("购买克拉肯干钓竿", function()
-    BuyRodEvent:FireServer("Kraken Rod")
-end)
-
--- 位置与 NPC 传送
-UtilityTab:AddButton("传送核弹岛", function()
-    TeleportToPos(76.44, 9.28, 1268.03)
-end)
-
-UtilityTab:AddButton("传送曾天国【NPC】", function()
-    TeleportToPos(147.20, 6.76, 1370.38)
-end)
-
-UtilityTab:AddButton("传送琥珀岛", function()
-    TeleportToPos(1462.48, 9.28, 1219.10)
-end)
-
-UtilityTab:AddButton("传送战争岛", function()
-    TeleportToPos(1247.79, 19.56, 52.70)
-end)
-
-UtilityTab:AddButton("传送老江【NPC】", function()
-    TeleportToPos(1536, 47.58, -77.06)
-end)
-
-UtilityTab:AddButton("传送圣人易九【NPC】", function()
-    TeleportToPos(-120.45, 6.76, 40.20)
-end)
-
-UtilityTab:AddButton("传送寻票任务【NPC】", function()
-    TeleportToPos(-150.10, 7.57, 91.52)
+UtilityTab:AddDropdown("功能操作", {
+    "一键出售全部鱼",
+    "打开购买鱼竿面板",
+    "打开制造鱼竿面板",
+    "打开购买诱饵面板",
+    "打开制造诱饵面板",
+    "购买克拉肯干钓竿"
+}, function(selected)
+    if selected == "一键出售全部鱼" then
+        SellAllFish()
+    elseif selected == "打开购买鱼竿面板" then
+        DialogueEvent:FireServer("BuyFishingRod", 1, "BuyRod")
+    elseif selected == "打开制造鱼竿面板" then
+        DialogueEvent:FireServer("BuyFishingRod", 2, "CraftRod")
+    elseif selected == "打开购买诱饵面板" then
+        DialogueEvent:FireServer("BuyBait", 1, "BaitShop")
+    elseif selected == "打开制造诱饵面板" then
+        DialogueEvent:FireServer("BuyBait", 2, "CraftBait")
+    elseif selected == "购买克拉肯干钓竿" then
+        BuyRodEvent:FireServer("Kraken Rod")
+    end
 end)
