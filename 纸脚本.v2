@@ -48,10 +48,6 @@ local TextChatService = game:GetService("TextChatService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- ==========================================================
--- 加载 zhiUI 界面框架
--- ==========================================================
-
 local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
 
 local Window = zhiUI:CreateWindow({
@@ -61,10 +57,6 @@ local Window = zhiUI:CreateWindow({
 local GeneralTab = Window:AddTab("通用")
 local ExclusiveTab = Window:AddTab("专属游戏")
 local ToolTab = Window:AddTab("工具与其他")
-
--- ==========================================================
--- 全局变量与设置
--- ==========================================================
 
 local settings = {
     flyEnabled = false,
@@ -111,10 +103,6 @@ local function createFlyObjects(hrp)
     flyBodyGyro.CFrame = hrp.CFrame
     flyBodyGyro.Parent = hrp
 end
-
--- ==========================================================
--- Silent Aim (子弹追踪)
--- ==========================================================
 
 local function getClosestTarget()
     local camera = Workspace.CurrentCamera
@@ -165,10 +153,6 @@ pcall(function()
     end
 end)
 
--- ==========================================================
--- 通用 UI 控件绑定
--- ==========================================================
-
 GeneralTab:AddToggle("开启飞行", false, function(state)
     settings.flyEnabled = state
     if not state then removeFlyObjects() end
@@ -206,10 +190,6 @@ GeneralTab:AddToggle("防甩飞", false, function(state)
     settings.antiFling = state
 end)
 
--- ==========================================================
--- 专属游戏 UI 绑定
--- ==========================================================
-
 ExclusiveTab:AddButton("加载 纸.99夜", function()
     pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.99%E5%A4%9C"))()
@@ -246,10 +226,6 @@ ExclusiveTab:AddButton("加载 纸.重型钓鱼", function()
     end)
 end)
 
--- ==========================================================
--- 工具 UI 绑定
--- ==========================================================
-
 ToolTab:AddButton("撸管工具 R6", function()
     pcall(function() loadstring(game:HttpGet("https://pastefy.app/wa3v2Vgm/raw"))() end)
 end)
@@ -266,11 +242,6 @@ ToolTab:AddButton("展开聊天框", function()
     pcall(function() TextChatService.ChatWindowConfiguration.Enabled = true end)
 end)
 
--- ==========================================================
--- 核心功能与运行引擎
--- ==========================================================
-
--- 天空跳跃
 UserInputService.JumpRequest:Connect(function()
     if not settings.skyJump then return end
     local character = LocalPlayer.Character
@@ -282,7 +253,6 @@ UserInputService.JumpRequest:Connect(function()
     hrp.AssemblyLinearVelocity = Vector3.new(velocity.X, 65, velocity.Z)
 end)
 
--- 防甩飞独立线程引擎 (优化 UI 性能)
 RunService.Heartbeat:Connect(function()
     if not settings.antiFling then return end
     for _, player in ipairs(Players:GetPlayers()) do
@@ -297,7 +267,6 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- 主渲染循环
 RunService.RenderStepped:Connect(function()
     local character = LocalPlayer.Character
     if not character then
@@ -311,7 +280,6 @@ RunService.RenderStepped:Connect(function()
 
     local camera = Workspace.CurrentCamera
 
-    -- 1. 穿墙
     if settings.noclip then
         for _, object in ipairs(character:GetDescendants()) do
             if object:IsA("BasePart") then
@@ -320,12 +288,10 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- 2. 加速
     if settings.speedHack then
         humanoid.WalkSpeed = settings.walkSpeed
     end
 
-    -- 3. 飞行
     if settings.flyEnabled and camera then
         if not flyBodyVelocity or not flyBodyVelocity.Parent or not flyBodyGyro or not flyBodyGyro.Parent then
             createFlyObjects(hrp)
@@ -356,13 +322,11 @@ RunService.RenderStepped:Connect(function()
         removeFlyObjects()
     end
 
-    -- 4. 陀螺自转
     if settings.spinBot then
         hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(30), 0)
     end
 end)
 
--- 角色生命周期监听
 LocalPlayer.CharacterAdded:Connect(function()
     removeFlyObjects()
     task.wait(1)
