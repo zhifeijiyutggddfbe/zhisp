@@ -6,6 +6,15 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then return end
 
+local TRASH_MAP_1 = Vector3.new(54.24, 65.29, -50.26)
+local TRASH_MAP_2 = Vector3.new(75.421, 65.802, -639.727)
+local TRASH_MAP_3 = Vector3.new(-43.616, 68.200, 354.185)
+local TRASH_MAP_4 = Vector3.new(-147.783, 371.686, 224.205)
+local TrashOffset = Vector3.new(0, 3, 0)
+
+local CurrentTrashName = "一号垃圾桶"
+local CurrentTrashPos  = TRASH_MAP_1
+
 local UI_URL = "https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"
 local zhiUI
 do
@@ -41,8 +50,6 @@ local ArriveDist     = 3
 local CollectRadius  = 22
 local FailCooldown   = 0.8
 local MaxJumpPerTick = 40
-local TrashPos       = Vector3.new(54.24, 65.29, -50.26)
-local TrashOffset    = Vector3.new(0, 3, 0)
 
 local running        = true
 local autoTrash      = true
@@ -50,6 +57,7 @@ local noclip         = true
 local autoBuyRake    = false
 local autoBuyMolotov = false
 local autoBuyBlower  = false
+local autoBuyMower   = false
 local autoBuyBag     = false
 local collectedTotal = 0
 local cooldowns      = setmetatable({}, { __mode = "k" })
@@ -210,7 +218,7 @@ local function fireEmptyBackpack()
 end
 
 local function goToTrashAndEmpty()
-	local target = TrashPos + TrashOffset
+	local target = CurrentTrashPos + TrashOffset
 	local r = flyTo(target, FlySpeed, false)
 	if r ~= true then return false end
 
@@ -265,6 +273,7 @@ end
 local function buyRake()     return buyToolCash("Rake") end
 local function buyMolotov()  return buyToolCash("Molotov") end
 local function buyBlower()   return buyToolCash("LeafBlower", "Leaf Blower") end
+local function buyMower()    return buyToolCash("LeafMower", "Leaf Mower") end
 
 local function collectAround(centerPos, radius)
 	local folder = getLeavesFolder()
@@ -360,11 +369,12 @@ task.spawn(function()
 		if autoBuyRake    then pcall(buyRake) end
 		if autoBuyMolotov then pcall(buyMolotov) end
 		if autoBuyBlower  then pcall(buyBlower) end
+		if autoBuyMower   then pcall(buyMower) end
 		if autoBuyBag     then pcall(buyBagUpgrade) end
 	end
 end)
 
-local Window = zhiUI:CreateWindow({ Title = "Leaf Auto Farm" })
+local Window = zhiUI:CreateWindow({ Title = "纸.拾取全部树叶" })
 
 local FarmTab = Window:AddTab("自动收集")
 
@@ -376,14 +386,43 @@ FarmTab:AddToggle("背包满自动倒垃圾", true, function(state)
 	autoTrash = state
 end)
 
+FarmTab:AddDropdown("选择地图", {
+	"一图",
+	"二图",
+	"三图",
+	"四图",
+}, function(selected)
+	if selected == "一图" then
+		CurrentTrashName = "一图"
+		CurrentTrashPos  = TRASH_MAP_1
+		zhiUI:Notify("垃圾桶", "已切换到 一图", 2)
+	elseif selected == "二图" then
+		CurrentTrashName = "二图"
+		CurrentTrashPos  = TRASH_MAP_2
+		zhiUI:Notify("垃圾桶", "已切换到 二图", 2)
+	elseif selected == "三图" then
+		CurrentTrashName = "三图"
+		CurrentTrashPos  = TRASH_MAP_3
+		zhiUI:Notify("垃圾桶", "已切换到 三图", 2)
+	elseif selected == "四图" then
+		CurrentTrashName = "四图"
+		CurrentTrashPos  = TRASH_MAP_4
+		zhiUI:Notify("垃圾桶", "已切换到 四图", 2)
+	end
+end)
+
 FarmTab:AddToggle("穿墙飞行", true, function(state)
 	noclip = state
 end)
 
 FarmTab:AddButton("立即倒垃圾", function()
 	task.spawn(function()
-		goToTrashAndEmpty()
-		zhiUI:Notify("倒垃圾", "已飞往垃圾桶并清空", 2)
+		local ok = goToTrashAndEmpty()
+		if ok then
+			zhiUI:Notify("倒垃圾", "已飞往 " .. CurrentTrashName .. " 并清空", 2)
+		else
+			zhiUI:Notify("倒垃圾", "飞行失败", 2)
+		end
 	end)
 end)
 
@@ -399,8 +438,9 @@ FarmTab:AddButton("显示状态", function()
 		bagStr = "-/-"
 	end
 	zhiUI:Notify("状态",
-		string.format("收集:%d  背包:%s  剩余:%d", collectedTotal, bagStr, nLeft),
-		3)
+		string.format("收集:%d  背包:%s  剩余:%d  当前垃圾桶:%s",
+			collectedTotal, bagStr, nLeft, CurrentTrashName),
+		4)
 end)
 
 local BuyTab = Window:AddTab("购买工具")
@@ -435,6 +475,16 @@ BuyTab:AddToggle("自动购买吹风筒", false, function(state)
 	autoBuyBlower = state
 end)
 
+BuyTab:AddButton("购买树叶割草机 (LeafMower)", function()
+	local ok, err = buyMower()
+	if ok then zhiUI:Notify("购买", "已发送割草机购买请求", 2)
+	else zhiUI:Notify("购买失败", tostring(err), 3) end
+end)
+
+BuyTab:AddToggle("自动购买树叶割草机", false, function(state)
+	autoBuyMower = state
+end)
+
 BuyTab:AddButton("升级背包 (BagUpgrade)", function()
 	local ok, err = buyBagUpgrade()
 	if ok then zhiUI:Notify("升级", "已发送背包升级请求", 2)
@@ -445,7 +495,7 @@ BuyTab:AddToggle("自动升级背包", false, function(state)
 	autoBuyBag = state
 end)
 
-zhiUI:Notify("Leaf Auto Farm", "已加载，脚本运行中", 3)
+zhiUI:Notify("纸.拾取全部树叶", "已加载，当前垃圾桶: 一号垃圾桶", 3)
 
 LocalPlayer.CharacterAdded:Connect(function()
 	task.wait(0.5)
