@@ -1,3 +1,6 @@
+-- ==========================================================
+-- 监狱人生
+-- ==========================================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,11 +17,11 @@ local settings = {
 silentAim = false,
 wallCheck = true,
 visualTracers = false,
-tracerColorName = "Blue",
-tracerShape = "Beam",
+tracerColorName = "蓝色",
+tracerShape = "光束",
 fastPunch = false,
 customWeaponColor = false,
-weaponColorMode = "Rainbow",
+weaponColorMode = "彩虹",
 customShootSound = false,
 skyJump = false,
 speedHack = false,
@@ -30,16 +33,16 @@ antitase = false,
 }
 local GLASS_SHOOT_SOUND_ID = "rbxassetid://128763165071133"
 local LaserColors = {
-["Blue"]      = Color3.fromRGB(0, 170, 255),
-["Red"]       = Color3.fromRGB(255, 50, 50),
-["Green"]     = Color3.fromRGB(50, 255, 100),
-["Purple"]    = Color3.fromRGB(180, 50, 255),
-["Gold"]      = Color3.fromRGB(255, 200, 0),
-["Cyan"]      = Color3.fromRGB(0, 255, 230),
-["Neon Pink"] = Color3.fromRGB(255, 20, 147),
-["Lime"]      = Color3.fromRGB(124, 252, 0),
-["White"]     = Color3.fromRGB(255, 255, 255),
-["Rainbow"]   = Color3.fromRGB(255, 255, 255)
+["蓝色"]   = Color3.fromRGB(0, 170, 255),
+["红色"]   = Color3.fromRGB(255, 50, 50),
+["绿色"]   = Color3.fromRGB(50, 255, 100),
+["紫色"]   = Color3.fromRGB(180, 50, 255),
+["金色"]   = Color3.fromRGB(255, 200, 0),
+["青色"]   = Color3.fromRGB(0, 255, 230),
+["霓虹粉"] = Color3.fromRGB(255, 20, 147),
+["柠绿"]   = Color3.fromRGB(124, 252, 0),
+["白色"]   = Color3.fromRGB(255, 255, 255),
+["彩虹"]   = Color3.fromRGB(255, 255, 255)
 }
 local ProtectedTeams = {
 ["Inmates"] = false,
@@ -59,61 +62,61 @@ local VisualTab = Window:AddTab("视觉渲染")
 local PlayerTab = Window:AddTab("玩家机动")
 local ItemTab   = Window:AddTab("物品获取")
 local SafetyTab = Window:AddTab("防护设置")
-MainTab:AddToggle("静默自瞄 (Silent Aim)", false, function(state)
+MainTab:AddToggle("静默自瞄", false, function(state)
 settings.silentAim = state
 zhiUI:Notify("自瞄模式", state and "静默自瞄已开启" or "静默自瞄已关闭", 2)
 end)
-MainTab:AddToggle("墙壁检测 (Wall Check)", true, function(state)
+MainTab:AddToggle("墙壁检测", true, function(state)
 settings.wallCheck = state
 end)
-MainTab:AddToggle("自动换弹 (Auto Reload)", true, function(state)
+MainTab:AddToggle("自动换弹", true, function(state)
 settings.autoReload = state
 end)
-MainTab:AddToggle("秒杀拳击 (Fast Punch)", false, function(state)
+MainTab:AddToggle("秒杀拳击", false, function(state)
 settings.fastPunch = state
 zhiUI:Notify("拳击增强", state and "秒杀拳击已激活" or "已关闭秒杀拳击", 2)
 end)
-MainTab:AddDropdown("保护囚犯 (Inmates)", {"关闭保护", "开启保护"}, function(selected)
+MainTab:AddDropdown("保护囚犯", {"关闭保护", "开启保护"}, function(selected)
 ProtectedTeams["Inmates"] = (selected == "开启保护")
 end)
-MainTab:AddDropdown("保护警卫 (Guards)", {"关闭保护", "开启保护"}, function(selected)
+MainTab:AddDropdown("保护警卫", {"关闭保护", "开启保护"}, function(selected)
 ProtectedTeams["Guards"] = (selected == "开启保护")
 end)
-MainTab:AddDropdown("保护罪犯 (Criminals)", {"关闭保护", "开启保护"}, function(selected)
+MainTab:AddDropdown("保护罪犯", {"关闭保护", "开启保护"}, function(selected)
 ProtectedTeams["Criminals"] = (selected == "开启保护")
 end)
-VisualTab:AddToggle("视觉激光 (Tracers)", false, function(state)
+VisualTab:AddToggle("视觉激光", false, function(state)
 settings.visualTracers = state
 zhiUI:Notify("弹道激光", state and "显示动态弹道轨迹" or "隐藏弹道轨迹", 2)
 end)
-VisualTab:AddDropdown("激光颜色", {"Blue", "Red", "Green", "Purple", "Gold", "Cyan", "Neon Pink", "Lime", "White", "Rainbow"}, function(selected)
+VisualTab:AddDropdown("激光颜色", {"蓝色", "红色", "绿色", "紫色", "金色", "青色", "霓虹粉", "柠绿", "白色", "彩虹"}, function(selected)
 settings.tracerColorName = selected
 end)
-VisualTab:AddDropdown("激光形状", {"Line", "Beam", "Cylinder", "Rope", "Particles", "Neon Box", "Lightning", "Pulse Rings"}, function(selected)
+VisualTab:AddDropdown("激光形状", {"直线", "光束", "圆柱", "绳索", "粒子", "霓虹方块", "闪电", "脉冲环"}, function(selected)
 settings.tracerShape = selected
 end)
 VisualTab:AddToggle("开启枪械染色", false, function(state)
 settings.customWeaponColor = state
 zhiUI:Notify("枪械特效", state and "枪械染色已开启" or "已恢复枪械默认外观", 2)
 end)
-VisualTab:AddDropdown("枪械外观颜色", {"Rainbow", "Blue", "Red", "Green", "Purple", "Gold", "Cyan", "Neon Pink", "Lime", "White"}, function(selected)
+VisualTab:AddDropdown("枪械外观颜色", {"彩虹", "蓝色", "红色", "绿色", "紫色", "金色", "青色", "霓虹粉", "柠绿", "白色"}, function(selected)
 settings.weaponColorMode = selected
 end)
 VisualTab:AddToggle("玻璃击发音效", false, function(state)
 settings.customShootSound = state
 zhiUI:Notify("音效替换", state and "击发音效已替换为玻璃敲击声" or "恢复默认枪声", 2)
 end)
-PlayerTab:AddToggle("天空跳跃 (Sky Jump)", false, function(state)
+PlayerTab:AddToggle("天空跳跃", false, function(state)
 settings.skyJump = state
 end)
-PlayerTab:AddToggle("速度加速 (Speed Hack)", false, function(state)
+PlayerTab:AddToggle("速度加速", false, function(state)
 settings.speedHack = state
 end)
-PlayerTab:AddToggle("穿墙模式 (Noclip)", false, function(state)
+PlayerTab:AddToggle("穿墙模式", false, function(state)
 settings.noclip = state
 zhiUI:Notify("穿墙", state and "穿墙已开启" or "穿墙已关闭", 2)
 end)
-PlayerTab:AddToggle("陀螺自转 (Spinbot)", false, function(state)
+PlayerTab:AddToggle("陀螺自转", false, function(state)
 settings.spinBot = state
 end)
 local function fetchWeapon(gunName)
@@ -148,7 +151,7 @@ end
 end
 ItemTab:AddButton("一键获取 AK-47", function() fetchWeapon("AK-47") end)
 ItemTab:AddButton("一键获取 MP5", function() fetchWeapon("MP5") end)
-ItemTab:AddButton("获取钥匙卡 (Keycard)", function()
+ItemTab:AddButton("获取钥匙卡", function()
 local source = ReplicatedStorage:FindFirstChild("Key card", true)
 if source then
 source:Clone().Parent = LocalPlayer.Backpack
@@ -157,8 +160,8 @@ else
 zhiUI:Notify("失败", "未能找到钥匙卡资源", 2)
 end
 end)
-SafetyTab:AddToggle("反手铐 (Anti Arrest)", false, function(state) settings.antiarrest = state end)
-SafetyTab:AddToggle("反电击 (Anti Tase)", false, function(state) settings.antitase = state end)
+SafetyTab:AddToggle("反手铐", false, function(state) settings.antiarrest = state end)
+SafetyTab:AddToggle("反电击", false, function(state) settings.antitase = state end)
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PrisonLife_HUD_Overlay"
 ScreenGui.ResetOnSpawn = false
@@ -207,7 +210,7 @@ AmmoStroke.Transparency = 0.8
 local AmmoText = Instance.new("TextLabel", AmmoBox)
 AmmoText.Size = UDim2.new(1, 0, 1, 0)
 AmmoText.BackgroundTransparency = 1
-AmmoText.Text = "AMMO: --"
+AmmoText.Text = "弹药: --"
 AmmoText.TextColor3 = Color3.fromRGB(0, 200, 255)
 AmmoText.Font = Enum.Font.GothamBold
 AmmoText.TextSize = 14
@@ -215,7 +218,7 @@ local function spawnCustomTracer(startPos, endPos, color)
 local shape = settings.tracerShape
 local dist = (startPos - endPos).Magnitude
 if dist <= 0.1 then return end
-if shape == "Beam" then
+if shape == "光束" then
 local p0 = Instance.new("Part")
 p0.Size = Vector3.new(0.05, 0.05, 0.05)
 p0.Position = startPos
@@ -244,7 +247,7 @@ beam.TextureSpeed = 4
 beam.FaceCamera = true
 Debris:AddItem(p0, 0.12)
 Debris:AddItem(p1, 0.12)
-elseif shape == "Cylinder" then
+elseif shape == "圆柱" then
 local cyl = Instance.new("Part")
 cyl.Anchored = true
 cyl.CanCollide = false
@@ -254,7 +257,7 @@ cyl.Size = Vector3.new(0.25, dist, 0.25)
 cyl.CFrame = CFrame.new(startPos, endPos) * CFrame.new(0, 0, -dist / 2) * CFrame.Angles(math.rad(90), 0, 0)
 cyl.Parent = workspace
 Debris:AddItem(cyl, 0.1)
-elseif shape == "Rope" then
+elseif shape == "绳索" then
 local ropePart = Instance.new("Part")
 ropePart.Anchored = true
 ropePart.CanCollide = false
@@ -272,7 +275,7 @@ rope.Color = BrickColor.new(color)
 rope.Visible = true
 rope.Thickness = 0.15
 Debris:AddItem(ropePart, 0.1)
-elseif shape == "Particles" then
+elseif shape == "粒子" then
 local emitterPart = Instance.new("Part")
 emitterPart.Anchored = true
 emitterPart.CanCollide = false
@@ -288,7 +291,7 @@ pe.Lifetime = NumberRange.new(0.1, 0.2)
 pe.Rate = 250
 pe.Speed = NumberRange.new(3, 6)
 Debris:AddItem(emitterPart, 0.12)
-elseif shape == "Neon Box" then
+elseif shape == "霓虹方块" then
 local segments = math.clamp(math.floor(dist / 3), 2, 10)
 for i = 0, segments do
 local pos = startPos:Lerp(endPos, i / segments)
@@ -306,7 +309,7 @@ Transparency = 1
 }):Play()
 Debris:AddItem(box, 0.15)
 end
-elseif shape == "Lightning" then
+elseif shape == "闪电" then
 local segments = math.clamp(math.floor(dist / 4), 3, 12)
 local lastPt = startPos
 for i = 1, segments do
@@ -327,7 +330,7 @@ seg.Parent = workspace
 Debris:AddItem(seg, 0.08)
 lastPt = nextPt
 end
-elseif shape == "Pulse Rings" then
+elseif shape == "脉冲环" then
 local ringCount = math.clamp(math.floor(dist / 5), 2, 8)
 for i = 1, ringCount do
 local pos = startPos:Lerp(endPos, i / ringCount)
@@ -376,7 +379,7 @@ if char then
 local tool = char:FindFirstChildOfClass("Tool")
 if tool then
 local colorToApply
-if settings.weaponColorMode == "Rainbow" then
+if settings.weaponColorMode == "彩虹" then
 colorToApply = getRainbowColor()
 else
 colorToApply = LaserColors[settings.weaponColorMode] or Color3.fromRGB(255, 255, 255)
@@ -527,10 +530,10 @@ end)
 end
 end
 if tool and currentAmmo ~= nil then
-AmmoText.Text = "AMMO: " .. tostring(currentAmmo)
+AmmoText.Text = "弹药: " .. tostring(currentAmmo)
 if settings.autoReload and currentAmmo <= 0 and not isReloading then
 isReloading = true
-AmmoText.Text = "RELOADING"
+AmmoText.Text = "换弹中..."
 AmmoText.TextColor3 = Color3.fromRGB(255, 170, 0)
 task.spawn(function()
 pcall(function() ReloadRemote:InvokeServer() end)
@@ -540,7 +543,7 @@ AmmoText.TextColor3 = Color3.fromRGB(0, 200, 255)
 end)
 end
 else
-AmmoText.Text = "AMMO: --"
+AmmoText.Text = "弹药: --"
 AmmoText.TextColor3 = Color3.fromRGB(0, 200, 255)
 end
 if settings.silentAim then
@@ -559,8 +562,8 @@ lastHitLog[target.Name] = now
 addHitLog(LocalPlayer.Name, target.Name, tool.Name)
 end
 if settings.visualTracers then
-local color = LaserColors[settings.tracerColorName] or LaserColors["Blue"]
-if settings.tracerColorName == "Rainbow" then
+local color = LaserColors[settings.tracerColorName] or LaserColors["蓝色"]
+if settings.tracerColorName == "彩虹" then
 color = getRainbowColor()
 end
 spawnCustomTracer(myHrp.Position, targetHead.Position, color)
