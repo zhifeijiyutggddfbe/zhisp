@@ -202,7 +202,7 @@ end)
 
 ExclusiveTab:AddButton("加载 纸.乌托邦", function()
     pcall(function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/main/%E7%BA%B8.1948%E4%B9%8C%E6%89%98%E9%82%A6"))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/main/%E7%BA%B8.1984%E4%B9%8C%E6%89%98%E9%82%A6"))()
     end)
 end)
 
