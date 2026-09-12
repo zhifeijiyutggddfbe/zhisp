@@ -182,8 +182,8 @@ TeleportTab:AddDropdown("传送岛屿", {
     "战争岛",
     "椰子岛",
     "迷雾峰岛",
-    "初始岛屿"  
-    "冰霜岛屿"
+    "初始岛屿",
+    "冰霜岛屿",
     "竹子岛"
 }, function(selected)
     local coords = {
@@ -202,12 +202,13 @@ end)
 
 TeleportTab:AddDropdown("传送NPC", {
     "曾天国【NPC】",
-    "老江【NPC】",
-    "圣人易九【NPC】",
+    "老江 （战争岛）【NPC】",
+    "圣人易九 （初始岛屿）【NPC】",
     "寻票任务【NPC】",
     "Duan Gun【NPC】",
     "圣人易九（战争岛）【NPC】",
-    "北冥【NPC】"
+    "北冥【NPC】",
+    "老江 （竹子岛）【NPC】"
 }, function(selected)
     local coords = {
         ["曾天国【NPC】"] = {147.20, 6.76, 1370.38},
