@@ -1,13 +1,10 @@
--- 1. 远程加载 zhiUI 库
 local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
 
--- 2. 服务与变量定义
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 
--- 全局功能开关与参数配置
 local CombatToggles = {
     KillAura = false,
     AutoStunDeer = false
@@ -27,7 +24,6 @@ local EnvConfig = {
     Fullbright = false
 }
 
--- 备份 Lighting 初始环境设置（用于关闭 Fullbright 时恢复）
 local DefaultLighting = {
     Brightness = Lighting.Brightness,
     ClockTime = Lighting.ClockTime,
@@ -36,7 +32,6 @@ local DefaultLighting = {
     OutdoorAmbient = Lighting.OutdoorAmbient
 }
 
--- 列表配置
 local ValidWeapons = {
     ["Old Axe"] = true, 
     ["Good Axe"] = true, 
@@ -73,7 +68,6 @@ for _, item in ipairs(ItemList) do
     ItemToggles[item.name] = false
 end
 
--- 3. 核心功能函数
 local function BringItem(itemName)
     local inventory = LocalPlayer:FindFirstChild("Inventory")
     local itemsFolder = workspace:FindFirstChild("Items")
@@ -126,9 +120,6 @@ local function PlantTreesInCircle()
     end
 end
 
--- 4. 后台循环逻辑
-
--- 战斗逻辑：杀戮光环
 task.spawn(function()
     while true do
         if CombatToggles.KillAura then
@@ -163,7 +154,6 @@ task.spawn(function()
     end
 end)
 
--- 战斗逻辑：自动击晕鹿
 task.spawn(function()
     while true do
         if CombatToggles.AutoStunDeer then
@@ -180,7 +170,6 @@ task.spawn(function()
     end
 end)
 
--- 伐木逻辑：自动砍树
 task.spawn(function()
     while true do
         if ChopConfig.AutoChop then
@@ -222,7 +211,6 @@ task.spawn(function()
     end
 end)
 
--- 环境逻辑：高频保持全亮 (防止游戏服务器重置时间/迷雾)
 task.spawn(function()
     while true do
         if EnvConfig.Fullbright then
@@ -236,13 +224,10 @@ task.spawn(function()
     end
 end)
 
--- 5. 构建 UI 界面
-
 local Window = zhiUI:CreateWindow({
     Title = "纸.99夜"
 })
 
--- 分页 1：战斗功能
 local CombatTab = Window:AddTab("战斗功能")
 
 CombatTab:AddToggle("杀戮光环 (Kill Aura)", false, function(state)
@@ -253,7 +238,6 @@ CombatTab:AddToggle("自动击晕鹿 (Auto Stun Deer)", false, function(state)
     CombatToggles.AutoStunDeer = state
 end)
 
--- 分页 2：物品收集
 local ItemTab = Window:AddTab("物品收集")
 
 ItemTab:AddToggle("一键开启 / 关闭全图物品收集", false, function(state)
@@ -288,7 +272,6 @@ for _, item in ipairs(ItemList) do
     end)
 end
 
--- 分页 3：伐木与种植
 local WoodTab = Window:AddTab("伐木与种植")
 
 WoodTab:AddToggle("自动砍树 (Auto Chop)", false, function(state)
@@ -325,13 +308,11 @@ WoodTab:AddButton("单次种植一圈树", function()
     task.spawn(PlantTreesInCircle)
 end)
 
--- 分页 4：环境效果
 local EnvTab = Window:AddTab("环境效果")
 
 EnvTab:AddToggle("全亮夜视 (Fullbright)", false, function(state)
     EnvConfig.Fullbright = state
-    if not state then
-        -- 恢复默认环境设置
+    if not state the
         Lighting.Brightness = DefaultLighting.Brightness
         Lighting.ClockTime = DefaultLighting.ClockTime
         Lighting.FogEnd = DefaultLighting.FogEnd
