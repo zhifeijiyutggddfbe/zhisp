@@ -44,12 +44,12 @@ if not LeafSim then
 	return
 end
 
-local FlySpeed       = 300
-local FlyTimeout     = 10
-local ArriveDist     = 4
-local CollectRadius  = 50
+local FlySpeed       = 120
+local FlyTimeout     = 12
+local ArriveDist     = 3
+local CollectRadius  = 22
 local FailCooldown   = 0.8
-local BatchLimit     = 300
+local MaxJumpPerTick = 40
 
 local running        = true
 local autoTrash      = true
@@ -90,6 +90,21 @@ local function isValidLeaf(leaf)
 	if leaf.CanQuery == false then return false end
 	if leaf.Transparency >= 0.9 then return false end
 	return true
+end
+
+local function tryCollect(leaf)
+	if not isValidLeaf(leaf) then return false end
+	local cd = cooldowns[leaf]
+	if cd and os.clock() < cd then return false end
+
+	local ok, res = pcall(LeafSim.collect, leaf)
+	if ok and res == true then
+		collectedTotal = collectedTotal + 1
+		cooldowns[leaf] = nil
+		return true
+	end
+	cooldowns[leaf] = os.clock() + FailCooldown
+	return false
 end
 
 local function isBagFull()
@@ -172,68 +187,21 @@ local function findNearestLeaf()
 	local ok, children = pcall(function() return folder:GetChildren() end)
 	if not ok or type(children) ~= "table" then return nil end
 
-	local bestLeaf, bestDistSq = nil, math.huge
+	local bestLeaf, bestDist = nil, math.huge
 	local rp = hrp.Position
 	for _, leaf in ipairs(children) do
 		if isValidLeaf(leaf) then
 			local okP, lp = pcall(function() return leaf.Position end)
 			if okP and lp then
-				local dx = lp.X - rp.X
-				local dy = lp.Y - rp.Y
-				local dz = lp.Z - rp.Z
-				local dsq = dx*dx + dy*dy + dz*dz
-				if dsq < bestDistSq then
-					bestDistSq = dsq
+				local d = (lp - rp).Magnitude
+				if d < bestDist then
+					bestDist = d
 					bestLeaf = leaf
 				end
 			end
 		end
 	end
 	return bestLeaf
-end
-
-local function collectAroundBatch(centerPos, radius, maxCount)
-	local folder = getLeavesFolder()
-	if not folder then return 0 end
-
-	local ok, children = pcall(function() return folder:GetChildren() end)
-	if not ok or type(children) ~= "table" then return 0 end
-
-	maxCount = maxCount or BatchLimit
-	local r2 = radius * radius
-	local now = os.clock()
-	local batch = {}
-
-	for _, l in ipairs(children) do
-		if #batch >= maxCount then break end
-		if isValidLeaf(l) then
-			local cd = cooldowns[l]
-			if not (cd and now < cd) then
-				local okP, lp = pcall(function() return l.Position end)
-				if okP and lp then
-					local dx = lp.X - centerPos.X
-					local dy = lp.Y - centerPos.Y
-					local dz = lp.Z - centerPos.Z
-					if dx*dx + dy*dy + dz*dz <= r2 then
-						batch[#batch + 1] = l
-					end
-				end
-			end
-		end
-	end
-
-	if #batch == 0 then return 0 end
-
-	local okc, res = pcall(LeafSim.collectMany, batch)
-	if okc and type(res) == "number" and res > 0 then
-		collectedTotal = collectedTotal + res
-		return res
-	end
-
-	for _, l in ipairs(batch) do
-		cooldowns[l] = now + FailCooldown
-	end
-	return 0
 end
 
 local function getRemotes()
@@ -307,6 +275,25 @@ local function buyMolotov()  return buyToolCash("Molotov") end
 local function buyBlower()   return buyToolCash("LeafBlower", "Leaf Blower") end
 local function buyMower()    return buyToolCash("LeafMower", "Leaf Mower") end
 
+local function collectAround(centerPos, radius)
+	local folder = getLeavesFolder()
+	if not folder then return 0 end
+	local ok, children = pcall(function() return folder:GetChildren() end)
+	if not ok or type(children) ~= "table" then return 0 end
+
+	local n = 0
+	for _, l in ipairs(children) do
+		if n >= MaxJumpPerTick then break end
+		if isValidLeaf(l) and not (cooldowns[l] and os.clock() < cooldowns[l]) then
+			local okP, lp = pcall(function() return l.Position end)
+			if okP and lp and (lp - centerPos).Magnitude <= radius then
+				if tryCollect(l) then n = n + 1 end
+			end
+		end
+	end
+	return n
+end
+
 local function tick()
 	if not running then return end
 	if not isAlive() then task.wait(0.2) return end
@@ -316,17 +303,9 @@ local function tick()
 		return
 	end
 
-	local hrp = getHRP()
-	if not hrp then task.wait(0.1) return end
-
-	local n = collectAroundBatch(hrp.Position, CollectRadius, BatchLimit)
-	if n > 0 then
-		return
-	end
-
 	local leaf = findNearestLeaf()
 	if not leaf then
-		task.wait(0.1)
+		task.wait(0.15)
 		return
 	end
 
@@ -341,10 +320,14 @@ local function tick()
 		return
 	end
 
-	local hrp2 = getHRP()
-	if hrp2 then
-		collectAroundBatch(hrp2.Position, CollectRadius, BatchLimit)
+	tryCollect(leaf)
+
+	local hrp = getHRP()
+	if hrp then
+		collectAround(hrp.Position, CollectRadius)
 	end
+
+	task.wait(0.04)
 end
 
 task.spawn(function()
@@ -352,7 +335,7 @@ task.spawn(function()
 		if running then
 			pcall(tick)
 		end
-		task.wait(0.02)
+		task.wait(0.03)
 	end
 end)
 
@@ -363,12 +346,9 @@ local function hookFolder(folder)
 	pcall(function()
 		folder.ChildAdded:Connect(function(child)
 			if not running or (autoTrash and isBagFull()) then return end
-			task.delay(0.04, function()
+			task.delay(0.05, function()
 				if running and isValidLeaf(child) then
-					local hrp = getHRP()
-					if hrp and (child.Position - hrp.Position).Magnitude <= CollectRadius then
-						collectAroundBatch(hrp.Position, CollectRadius, BatchLimit)
-					end
+					tryCollect(child)
 				end
 			end)
 		end)
@@ -406,28 +386,28 @@ FarmTab:AddToggle("背包满自动倒垃圾", true, function(state)
 	autoTrash = state
 end)
 
-FarmTab:AddDropdown("选择地图", {
-	"一图",
-	"二图",
-	"三图",
-	"四图",
+FarmTab:AddDropdown("选择垃圾桶", {
+	"一号垃圾桶",
+	"二号垃圾桶",
+	"三号垃圾桶",
+	"四号垃圾桶",
 }, function(selected)
-	if selected == "一图" then
-		CurrentTrashName = "一图"
+	if selected == "一号垃圾桶" then
+		CurrentTrashName = "一号垃圾桶"
 		CurrentTrashPos  = TRASH_MAP_1
-		zhiUI:Notify("垃圾桶", "已切换到 一图", 2)
-	elseif selected == "二图" then
-		CurrentTrashName = "二图"
+		zhiUI:Notify("垃圾桶", "已切换到 一号垃圾桶", 2)
+	elseif selected == "二号垃圾桶" then
+		CurrentTrashName = "二号垃圾桶"
 		CurrentTrashPos  = TRASH_MAP_2
-		zhiUI:Notify("垃圾桶", "已切换到 二图", 2)
-	elseif selected == "三图" then
-		CurrentTrashName = "三图"
+		zhiUI:Notify("垃圾桶", "已切换到 二号垃圾桶", 2)
+	elseif selected == "三号垃圾桶" then
+		CurrentTrashName = "三号垃圾桶"
 		CurrentTrashPos  = TRASH_MAP_3
-		zhiUI:Notify("垃圾桶", "已切换到 三图", 2)
-	elseif selected == "四图" then
-		CurrentTrashName = "四图"
+		zhiUI:Notify("垃圾桶", "已切换到 三号垃圾桶", 2)
+	elseif selected == "四号垃圾桶" then
+		CurrentTrashName = "四号垃圾桶"
 		CurrentTrashPos  = TRASH_MAP_4
-		zhiUI:Notify("垃圾桶", "已切换到 四图", 2)
+		zhiUI:Notify("垃圾桶", "已切换到 四号垃圾桶", 2)
 	end
 end)
 
