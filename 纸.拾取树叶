@@ -406,28 +406,28 @@ FarmTab:AddToggle("背包满自动倒垃圾", true, function(state)
 	autoTrash = state
 end)
 
-FarmTab:AddDropdown("选择垃圾桶", {
-	"一号垃圾桶",
-	"二号垃圾桶",
-	"三号垃圾桶",
-	"四号垃圾桶",
+FarmTab:AddDropdown("选择地图", {
+	"一图",
+	"二图",
+	"三图",
+	"四图",
 }, function(selected)
-	if selected == "一号垃圾桶" then
-		CurrentTrashName = "一号垃圾桶"
+	if selected == "一图" then
+		CurrentTrashName = "一图"
 		CurrentTrashPos  = TRASH_MAP_1
-		zhiUI:Notify("垃圾桶", "已切换到 一号垃圾桶", 2)
-	elseif selected == "二号垃圾桶" then
-		CurrentTrashName = "二号垃圾桶"
+		zhiUI:Notify("垃圾桶", "已切换到 一图", 2)
+	elseif selected == "二图" then
+		CurrentTrashName = "二图"
 		CurrentTrashPos  = TRASH_MAP_2
-		zhiUI:Notify("垃圾桶", "已切换到 二号垃圾桶", 2)
-	elseif selected == "三号垃圾桶" then
-		CurrentTrashName = "三号垃圾桶"
+		zhiUI:Notify("垃圾桶", "已切换到 二图", 2)
+	elseif selected == "三图" then
+		CurrentTrashName = "三图"
 		CurrentTrashPos  = TRASH_MAP_3
-		zhiUI:Notify("垃圾桶", "已切换到 三号垃圾桶", 2)
-	elseif selected == "四号垃圾桶" then
-		CurrentTrashName = "四号垃圾桶"
+		zhiUI:Notify("垃圾桶", "已切换到 三图", 2)
+	elseif selected == "四图" then
+		CurrentTrashName = "四图"
 		CurrentTrashPos  = TRASH_MAP_4
-		zhiUI:Notify("垃圾桶", "已切换到 四号垃圾桶", 2)
+		zhiUI:Notify("垃圾桶", "已切换到 四图", 2)
 	end
 end)
 
