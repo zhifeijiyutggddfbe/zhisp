@@ -912,7 +912,7 @@ TabOther:AddSlider("跳跃高度", 0, 500, 50, function(val)
 end)
 
 TabOther:AddButton("飞行", function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/Xingtaiduan/Script/main/Content/FlyGuiV3"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.%E9%A3%9E%E8%A1%8C"))()
 end)
 
 TabOther:AddToggle("穿墙", false, function(v)
