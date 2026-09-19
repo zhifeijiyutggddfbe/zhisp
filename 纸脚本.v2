@@ -117,7 +117,8 @@ pcall(function()
 end)
 
 GeneralTab:AddButton("纸.飞行", function()
-    pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.%E9%A3%9E%E8%A1%8C"))() end)
+    pcall(function()
+ loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.%E9%A3%9E%E8%A1%8C"))() end)
 end)
 
 GeneralTab:AddToggle("开启穿墙", false, function(state)
@@ -181,6 +182,12 @@ end)
 ExclusiveTab:AddButton("纸.重型钓鱼", function()
     pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.%E9%87%8D%E5%9E%8B%E9%92%93%E9%B1%BC"))()
+    end)
+end)
+
+ExclusiveTab:AddButton("纸.俄亥俄州", function()
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.俄亥俄州"))()
     end)
 end)
 
