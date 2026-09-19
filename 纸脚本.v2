@@ -58,7 +58,6 @@ local ToolTab = Window:AddTab("工具与其他")
 
 local settings = {
     flyEnabled = false,
-    flySpeed = 50,
     noclip = false,
     speedHack = false,
     walkSpeed = 100,
@@ -67,40 +66,6 @@ local settings = {
     silentAim = false,
     antiFling = false,
 }
-
-local flyBodyVelocity = nil
-local flyBodyGyro = nil
-
-local function removeFlyObjects()
-    if flyBodyVelocity then
-        pcall(function() flyBodyVelocity:Destroy() end)
-        flyBodyVelocity = nil
-    end
-    if flyBodyGyro then
-        pcall(function() flyBodyGyro:Destroy() end)
-        flyBodyGyro = nil
-    end
-end
-
-local function createFlyObjects(hrp)
-    removeFlyObjects()
-    if not hrp then return end
-
-    flyBodyVelocity = Instance.new("BodyVelocity")
-    flyBodyVelocity.Name = "PaperFlyVelocity"
-    flyBodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    flyBodyVelocity.P = 9000
-    flyBodyVelocity.Velocity = Vector3.zero
-    flyBodyVelocity.Parent = hrp
-
-    flyBodyGyro = Instance.new("BodyGyro")
-    flyBodyGyro.Name = "PaperFlyGyro"
-    flyBodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-    flyBodyGyro.P = 9000
-    flyBodyGyro.D = 500
-    flyBodyGyro.CFrame = hrp.CFrame
-    flyBodyGyro.Parent = hrp
-end
 
 local function getClosestTarget()
     local camera = Workspace.CurrentCamera
@@ -151,13 +116,13 @@ pcall(function()
     end
 end)
 
-GeneralTab:AddToggle("开启飞行", false, function(state)
+GeneralTab:AddToggle("纸.飞行", false, function(state)
     settings.flyEnabled = state
-    if not state then removeFlyObjects() end
-end)
-
-GeneralTab:AddSlider("飞行速度", 10, 200, 50, function(value)
-    settings.flySpeed = value
+    if state then
+        pcall(function()
+            loadstring(game:HttpGet("https://github.com/zhifeijiyutggddfbe/zhisp/blob/main/%E7%BA%B8.%E9%A3%9E%E8%A1%8C"))()
+        end)
+    end
 end)
 
 GeneralTab:AddToggle("开启穿墙", false, function(state)
@@ -267,16 +232,11 @@ end)
 
 RunService.RenderStepped:Connect(function()
     local character = LocalPlayer.Character
-    if not character then
-        removeFlyObjects()
-        return
-    end
+    if not character then return end
 
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     local hrp = character:FindFirstChild("HumanoidRootPart")
     if not humanoid or not hrp then return end
-
-    local camera = Workspace.CurrentCamera
 
     if settings.noclip then
         for _, object in ipairs(character:GetDescendants()) do
@@ -290,50 +250,7 @@ RunService.RenderStepped:Connect(function()
         humanoid.WalkSpeed = settings.walkSpeed
     end
 
-    if settings.flyEnabled and camera then
-        if not flyBodyVelocity or not flyBodyVelocity.Parent or not flyBodyGyro or not flyBodyGyro.Parent then
-            createFlyObjects(hrp)
-        end
-
-        if flyBodyVelocity and flyBodyGyro then
-            local moveDirection = Vector3.zero
-            local forward = camera.CFrame.LookVector
-            local right = camera.CFrame.RightVector
-
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDirection += forward end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDirection -= forward end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDirection -= right end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDirection += right end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDirection += Vector3.new(0, 1, 0) end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDirection -= Vector3.new(0, 1, 0) end
-
-            if moveDirection.Magnitude > 0 then
-                moveDirection = moveDirection.Unit
-                flyBodyVelocity.Velocity = moveDirection * settings.flySpeed
-            else
-                flyBodyVelocity.Velocity = Vector3.zero
-            end
-
-            flyBodyGyro.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + camera.CFrame.LookVector)
-        end
-    else
-        removeFlyObjects()
-    end
-
     if settings.spinBot then
         hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(30), 0)
     end
-end)
-
-LocalPlayer.CharacterAdded:Connect(function()
-    removeFlyObjects()
-    task.wait(1)
-    if settings.flyEnabled and LocalPlayer.Character then
-        local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then createFlyObjects(hrp) end
-    end
-end)
-
-LocalPlayer.CharacterRemoving:Connect(function()
-    removeFlyObjects()
 end)
