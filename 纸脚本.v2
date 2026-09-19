@@ -116,13 +116,8 @@ pcall(function()
     end
 end)
 
-GeneralTab:AddToggle("纸.飞行", false, function(state)
-    settings.flyEnabled = state
-    if state then
-        pcall(function()
-            loadstring(game:HttpGet("https://github.com/zhifeijiyutggddfbe/zhisp/blob/main/%E7%BA%B8.%E9%A3%9E%E8%A1%8C"))()
-        end)
-    end
+GeneralTab:AddButton("纸.飞行", function()
+    pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/zhifeijiyutggddfbe/zhisp/refs/heads/main/%E7%BA%B8.%E9%A3%9E%E8%A1%8C"))() end)
 end)
 
 GeneralTab:AddToggle("开启穿墙", false, function(state)
