@@ -1,6 +1,3 @@
--- ==========================================================
--- 监狱人生
--- ==========================================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -56,7 +53,7 @@ local function getRainbowColor()
 local hue = (tick() % 3) / 3
 return Color3.fromHSV(hue, 0.9, 1)
 end
-local Window = zhiUI:CreateWindow({Title = "监狱人生"})
+local Window = zhiUI:CreateWindow({Title = "纸.监狱人生"})
 local MainTab   = Window:AddTab("主控自瞄")
 local VisualTab = Window:AddTab("视觉渲染")
 local PlayerTab = Window:AddTab("玩家机动")
@@ -185,7 +182,7 @@ local text = Instance.new("TextLabel", item)
 text.Size = UDim2.new(1, -10, 1, 0)
 text.Position = UDim2.new(0, 10, 0, 0)
 text.BackgroundTransparency = 1
-text.Text = string.format("🎯 [%s] 攻击 -> %s (%s)", attackerName, targetName, toolName)
+text.Text = string.format("[%s] 攻击 -> %s (%s)", attackerName, targetName, toolName)
 text.TextColor3 = Color3.fromRGB(0, 230, 255)
 text.Font = Enum.Font.GothamBold
 text.TextSize = 10
@@ -210,7 +207,7 @@ AmmoStroke.Transparency = 0.8
 local AmmoText = Instance.new("TextLabel", AmmoBox)
 AmmoText.Size = UDim2.new(1, 0, 1, 0)
 AmmoText.BackgroundTransparency = 1
-AmmoText.Text = "弹药: --"
+AmmoText.Text = "真实弹药: --"
 AmmoText.TextColor3 = Color3.fromRGB(0, 200, 255)
 AmmoText.Font = Enum.Font.GothamBold
 AmmoText.TextSize = 14
