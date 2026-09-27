@@ -1,0 +1,958 @@
+local Players=game:GetService("Players")
+local RS=game:GetService("ReplicatedStorage")
+local RunService=game:GetService("RunService")
+local ProximityPromptService=game:GetService("ProximityPromptService")
+local LP=Players.LocalPlayer
+
+local zhiUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"
+))()
+
+task.spawn(function()
+        local started=os.clock()
+        local maxTime=1.2
+        local scan=getgc or (debug and debug.getgc)
+        if type(scan)~="function" then return end
+        local ok,objs=pcall(scan,true)
+        if not ok or type(objs)~="table" then return end
+        local setmeta=setrawmetatable or setmetatable
+        local getmeta=getrawmetatable or getmetatable
+        local getconstants=getconstants or (debug and debug.getconstants)
+        local setconstant=setconstant or (debug and debug.setconstant)
+        local batch=200
+        for i=1,#objs do
+                local obj=objs[i]
+                objs[i]=nil
+                if obj~=nil then
+                        if setmeta and type(obj)=="table" then
+                                local hasMeta=getmeta and getmeta(obj)
+                                if not hasMeta then
+                                        local selfRef=false
+                                        for _,v in pairs(obj) do
+                                                if v==obj then selfRef=true break end
+                                        end
+                                        if selfRef then
+                                                for _,v in pairs(obj) do
+                                                        if type(v)=="number" and v>=1 and v<=3 and obj[v]==nil then
+                                                                pcall(setmeta,obj,{__newindex=function() end})
+                                                                break
+                                                        end
+                                                end
+                                        end
+                                end
+                        end
+                        if getconstants and setconstant and type(obj)=="function" and debug and debug.info then
+                                local okS,src=pcall(debug.info,obj,"s")
+                                if okS and type(src)=="string"
+                                        and src:find("ReplicatedFirst",1,true)
+                                        and src:find("UGI",1,true) then
+                                        local okC,consts=pcall(getconstants,obj)
+                                        if okC and type(consts)=="table" then
+                                                for idx,c in next,consts do
+                                                        if type(c)=="string" and c=="Humanoid" then
+                                                                pcall(setconstant,obj,idx,"")
+                                                        end
+                                                end
+                                        end
+                                end
+                        end
+                end
+                if i%batch==0 then
+                        task.wait()
+                        if os.clock()-started>maxTime then break end
+                end
+        end
+end)
+
+pcall(function()
+        if typeof(hookmetamethod)~="function" then return end
+        if _G._TX_AntiRagHooked then return end
+        _G._TX_AntiRagHooked=true
+        local orig
+        orig=hookmetamethod(game,"__newindex",function(self,k,v)
+                if not checkcaller() and typeof(self)=="Instance" then
+                        if self:IsA("Motor6D") and k=="Enabled" and v==false then return nil end
+                        if self:IsA("Humanoid") then
+                                if k=="PlatformStand" and v==true then return nil end
+                        end
+                end
+                return orig(self,k,v)
+        end)
+end)
+
+local EggState=require(RS.Client.EggState)
+local AreaEggSlotIdentity=require(RS.Shared.Util.AreaEggSlotIdentity)
+local Assets=require(RS.Data.Assets)
+local vector=Vector3.new(0,4,0)
+local SAFE_ZONE=Vector3.new(538.99,70.61,-364.66)
+local FLIGHT_Y=90
+
+local areaCN={
+        Forest="森林",Lake="湖泊",Desert="沙漠",Jungle="丛林",
+        Snow="雪原",Volcano="火山",["Abyss Ocean"]="深渊海洋",
+        Prehistoric="史前",Cosmic="宇宙",StartArea="起始区",
+        ["Cherry Blossom"]="樱花",["Titan Temple"]="泰坦神殿",["Light Dark"]="光与暗",
+        ["Ice"]="冰原",["Lava"]="熔岩",["Ocean"]="海洋",["Sky"]="天空",
+        ["Cave"]="洞穴",["Ruins"]="遗迹",["Swamp"]="沼泽",["Tundra"]="苔原",
+        ["Mountain"]="山脉",["Beach"]="沙滩",
+}
+local rarityCN={
+        Common="普通",Uncommon="罕见",Rare="稀有",Epic="史诗",
+        Legendary="传说",Mythic="神话",Cosmic="宇宙",Secret="秘密",
+        Eternal="永恒",Divine="神圣",Titan="泰坦",["Light & Dark"]="光与暗",
+}
+local batCN={
+        Bat="基础球棒",WoodenBat="木质球棒",["Metal Bat"]="金属球棒",
+        ["Golden Bat"]="黄金球棒",["Crystal Bat"]="水晶球棒",
+        ["Neon Bat"]="霓虹球棒",["Lava Bat"]="熔岩球棒",
+        ["Ice Bat"]="寒冰球棒",["Shadow Bat"]="暗影球棒",
+        ["Rainbow Bat"]="彩虹球棒",
+}
+
+local FALLBACK_AREAS={
+        "Forest","Lake","Desert","Jungle","Snow","Volcano",
+        "Abyss Ocean","Prehistoric","Cosmic","Cherry Blossom","Titan Temple","Light Dark",
+}
+local FALLBACK_RARITIES={
+        "Common","Uncommon","Rare","Epic","Legendary","Mythic","Cosmic","Secret","Eternal","Divine",
+}
+
+local State={
+        autoSteal=false,
+        areas={},
+        rarities={},
+        tweenSpeed=300,
+        useOwnSpeed=false,
+        flightY=90,
+        antiEggDrop=true,
+        antiHit=false,
+        noCollide=true,
+        beautify=false,
+        skin="原版",
+        trail="无",
+        eggESP=false,
+        eggESPInfo=true,
+        eggESPState=true,
+        eggESPIcon=true,
+}
+
+local function hrp()
+        local c=LP.Character
+        return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local function fn2()
+        local objects=workspace:FindFirstChild("__OBJECTS")
+        local areas=objects and objects:FindFirstChild("Areas")
+        areas=areas and areas:FindFirstChild("GuardAreas")
+        local tbl={}
+        if areas then
+                for _,child in ipairs(areas:GetChildren()) do
+                        tbl[#tbl+1]=child.Name
+                end
+        end
+        if #tbl==0 then
+                for _,name in ipairs(FALLBACK_AREAS) do tbl[#tbl+1]=name end
+        end
+        table.sort(tbl)
+        return tbl
+end
+
+local function fn3()
+        local tbl={}
+        local tbl2={}
+        pcall(function()
+                for _,v4 in pairs(Assets.Directory) do
+                        local rarity=v4.Rarity
+                        if rarity and not tbl[rarity.DisplayName] then
+                                tbl[rarity.DisplayName]=true
+                                tbl2[#tbl2+1]={name=rarity.DisplayName,number=rarity.RarityNumber or math.huge}
+                        end
+                end
+        end)
+        table.sort(tbl2,function(a,b)
+                if a.number~=b.number then return a.number<b.number end
+                return a.name<b.name
+        end)
+        local tbl3={}
+        for i,v in ipairs(tbl2) do tbl3[i]=v.name end
+        if #tbl3==0 then
+                for _,name in ipairs(FALLBACK_RARITIES) do tbl3[#tbl3+1]=name end
+        end
+        return tbl3
+end
+
+local function inAreaFilter(areaId)
+        if type(State.areas)~="table" then return true end
+        local count=0
+        for _ in pairs(State.areas) do count=count+1 end
+        if count==0 then return true end
+        return State.areas[areaId]==true
+end
+
+local function inRarityFilter(rarityName)
+        if type(State.rarities)~="table" then return true end
+        local count=0
+        for _ in pairs(State.rarities) do count=count+1 end
+        if count==0 then return true end
+        return State.rarities[rarityName]==true
+end
+
+local function fn5(arg)
+        local v6=Assets.Directory[arg.AssetCategory]
+        return v6 and v6.Rarity and v6.Rarity.DisplayName or "?"
+end
+
+local function fn6(arg)
+        if arg.State~="Slot" then return false end
+        if not inAreaFilter(arg.AreaId) then return false end
+        if not inRarityFilter(fn5(arg)) then return false end
+        return true
+end
+
+local function fn7() return hrp() end
+
+local function fn8()
+        local v6=fn7()
+        if not v6 then return nil end
+        local v7=nil
+        local v8=nil
+        for _,record in ipairs(EggState.ReadFieldEggs().Records) do
+                if fn6(record) then
+                        local magnitude=(record.BottomCFrame.Position-v6.Position).Magnitude
+                        if not v7 or magnitude<v7 then
+                                v7=magnitude
+                                v8=record
+                        end
+                end
+        end
+        return v8
+end
+
+local function fn9(target)
+        local hrp=fn7()
+        if not hrp then return end
+        local character=hrp.Parent
+        if not character then return end
+        for _,child in ipairs(character:GetChildren()) do
+                if child:IsA("BasePart") then child.CanCollide=false end
+        end
+        local humanoid=character:FindFirstChildOfClass("Humanoid")
+        local speed=State.tweenSpeed
+        if State.useOwnSpeed then
+                local ws=humanoid and humanoid.WalkSpeed or 16
+                speed=math.max(ws*4,60)
+        end
+        local flightY=State.flightY
+
+        local function flyStep(goal)
+                local startTime=os.clock()
+                local lastTime=os.clock()
+                while hrp.Parent and os.clock()-startTime<6 do
+                        local current=hrp.Position
+                        local diff=goal-current
+                        local dist=diff.Magnitude
+                        if dist<=1.5 then
+                                hrp.CFrame=CFrame.new(goal)
+                                hrp.AssemblyLinearVelocity=Vector3.zero
+                                hrp.AssemblyAngularVelocity=Vector3.zero
+                                return true
+                        end
+                        local now=os.clock()
+                        local dt=math.min(now-lastTime,0.08)
+                        lastTime=now
+                        local step=math.min(speed*dt,dist)
+                        local newPos=current+diff.Unit*step
+                        hrp.CFrame=CFrame.new(newPos)
+                        hrp.AssemblyLinearVelocity=Vector3.zero
+                        hrp.AssemblyAngularVelocity=Vector3.zero
+                        RunService.Heartbeat:Wait()
+                end
+                return false
+        end
+
+        local startPos=hrp.Position
+        local targetY=math.max(target.Y+15,flightY)
+        flyStep(Vector3.new(startPos.X,targetY,startPos.Z))
+        flyStep(Vector3.new(target.X,targetY,target.Z))
+        flyStep(Vector3.new(target.X,target.Y,target.Z))
+        task.wait(0.15)
+end
+
+local function fn10(arg)
+        local v6=nil
+        if AreaEggSlotIdentity.LooksLikeFirstAreaUid(arg.Uid) then
+                v6=AreaEggSlotIdentity.SlotKey(arg.AreaId,arg.NestId)
+        end
+        local ok,result=pcall(EggState.CarryFieldEgg,arg.Uid,v6)
+        if ok then return result end
+        return false
+end
+
+local function fn12()
+        local v6=fn7()
+        if not v6 then return end
+        fn9(SAFE_ZONE)
+end
+
+local flag=false
+EggState.CarryChanged:Connect(function(arg)
+        flag=arg~=nil and arg.IsCarrying==true
+end)
+
+local AntiDrop={enabled=false,lockedUid=nil,recovering=false,lastOwned=0}
+
+local function inInventory(uid)
+        if not uid then return false end
+        local key=tostring(uid)
+        local c=LP.Character
+        if c then
+                for _,t in ipairs(c:GetChildren()) do
+                        if t:IsA("Tool") then
+                                local u=t:GetAttribute("UID") or t:GetAttribute("Uid") or t:GetAttribute("EggUid")
+                                if u and tostring(u)==key then return true end
+                        end
+                end
+        end
+        local b=LP:FindFirstChild("Backpack")
+        if b then
+                for _,t in ipairs(b:GetChildren()) do
+                        if t:IsA("Tool") then
+                                local u=t:GetAttribute("UID") or t:GetAttribute("Uid") or t:GetAttribute("EggUid")
+                                if u and tostring(u)==key then return true end
+                        end
+                end
+        end
+        return false
+end
+
+local function getHeldUid()
+        local c=LP.Character
+        if c then
+                for _,t in ipairs(c:GetChildren()) do
+                        if t:IsA("Tool") then
+                                local u=t:GetAttribute("UID") or t:GetAttribute("Uid") or t:GetAttribute("EggUid")
+                                if u then return u end
+                        end
+                end
+        end
+        local b=LP:FindFirstChild("Backpack")
+        if b then
+                local found=nil
+                local count=0
+                for _,t in ipairs(b:GetChildren()) do
+                        if t:IsA("Tool") then
+                                local u=t:GetAttribute("UID") or t:GetAttribute("Uid") or t:GetAttribute("EggUid")
+                                if u then
+                                        count=count+1
+                                        found=u
+                                        if count>1 then return nil end
+                                end
+                        end
+                end
+                if count==1 then return found end
+        end
+        return nil
+end
+
+local function findDropped(uid)
+        if not uid then return nil end
+        local key=tostring(uid)
+        local ok,snap=pcall(function() return EggState.ReadFieldEggs() end)
+        if ok and snap and snap.Records then
+                for _,rec in ipairs(snap.Records) do
+                        if tostring(rec.Uid)==key and rec.BottomCFrame then
+                                if rec.State=="Dropped" or rec.State=="Slot" then return rec end
+                        end
+                end
+        end
+        return nil
+end
+
+local function recoverUid(uid)
+        if AntiDrop.recovering or not uid then return end
+        AntiDrop.recovering=true
+        local dropped=findDropped(uid)
+        if not dropped or not dropped.BottomCFrame then
+                AntiDrop.recovering=false
+                return
+        end
+        local pos=dropped.BottomCFrame.Position
+        local r=hrp()
+        if r then
+                pcall(function() LP:RequestStreamAroundAsync(pos) end)
+                r.CFrame=CFrame.new(pos.X,pos.Y+2,pos.Z)
+                r.AssemblyLinearVelocity=Vector3.zero
+                r.AssemblyAngularVelocity=Vector3.zero
+        end
+        local deadline=os.clock()+0.4
+        local lastRemote=0
+        while AntiDrop.enabled and os.clock()<=deadline do
+                if inInventory(uid) then break end
+                local now=os.clock()
+                if now-lastRemote>=0.12 then
+                        lastRemote=now
+                        pcall(function() EggState.CarryFieldEgg(uid,nil) end)
+                end
+                RunService.Heartbeat:Wait()
+        end
+        if inInventory(uid) then
+                AntiDrop.lockedUid=uid
+                AntiDrop.lastOwned=os.clock()
+        end
+        AntiDrop.recovering=false
+end
+
+task.spawn(function()
+        while true do
+                task.wait(0.2)
+                if not AntiDrop.enabled then continue end
+                local now=os.clock()
+                local held=getHeldUid()
+                if held then
+                        AntiDrop.lockedUid=held
+                        AntiDrop.lastOwned=now
+                end
+                local uid=AntiDrop.lockedUid
+                if uid and not AntiDrop.recovering then
+                        if inInventory(uid) then
+                                AntiDrop.lastOwned=now
+                        else
+                                local d=findDropped(uid)
+                                if d then
+                                        task.spawn(function() recoverUid(uid) end)
+                                elseif now-AntiDrop.lastOwned>2 then
+                                        AntiDrop.lockedUid=nil
+                                end
+                        end
+                end
+        end
+end)
+
+local AntiHit={running=false,positions={
+        CFrame.new(4747.71,70.57,-335.25),
+        CFrame.new(3520.94,70.73,-343.74),
+        CFrame.new(2446.02,70.88,-351.18),
+        CFrame.new(1352.11,71.02,-358.75),
+        CFrame.new(544.49,71.13,-364.34),
+}}
+function AntiHit.Trigger()
+        if AntiHit.running then return end
+        local c=LP.Character
+        if not c then return end
+        local h=c:FindFirstChildOfClass("Humanoid")
+        local r=c:FindFirstChild("HumanoidRootPart")
+        if not h or not r then return end
+        AntiHit.running=true
+        h.BreakJointsOnDeath=false
+        for _,d in ipairs(c:GetDescendants()) do
+                if d:IsA("Motor6D") then d.Enabled=true end
+        end
+        for _,cf in ipairs(AntiHit.positions) do
+                h.PlatformStand=true
+                h.Health=100
+                r.CFrame=cf
+                r.AssemblyLinearVelocity=Vector3.zero
+                r.AssemblyAngularVelocity=Vector3.zero
+                task.wait(0.02)
+        end
+        task.wait(0.1)
+        h.PlatformStand=false
+        AntiHit.running=false
+end
+
+pcall(function()
+        ProximityPromptService.PromptTriggered:Connect(function(prompt,plr)
+                if plr~=LP then return end
+                local n=tostring(prompt)
+                if n=="CarryAreaEgg" or n:find("Egg") or n:find("Carry") then
+                        if State.antiHit then task.spawn(AntiHit.Trigger) end
+                end
+        end)
+end)
+
+local function fn13()
+        local gearTools=RS:FindFirstChild("GearTools")
+        gearTools=gearTools and gearTools:FindFirstChild("ShopItems")
+        local tbl3={}
+        if gearTools then
+                for _,child in ipairs(gearTools:GetChildren()) do
+                        local handle=child:FindFirstChild("Handle")
+                        if child:GetAttribute("GearName")=="Bat" and handle and handle:IsA("MeshPart") then
+                                tbl3[#tbl3+1]={
+                                        name=child.Name,
+                                        handle=handle,
+                                        textureId=handle.TextureID,
+                                        color=handle.Color,
+                                        material=handle.Material,
+                                }
+                        end
+                end
+        end
+        table.sort(tbl3,function(a,b) return a.name<b.name end)
+        return tbl3
+end
+
+local tbl3={}
+local skinNames={"原版"}
+local v7=fn13()
+for _,v8 in ipairs(v7) do
+        tbl3[v8.name]=v8
+        skinNames[#skinNames+1]=v8.name
+end
+if #skinNames==1 then skinNames[#skinNames+1]="Bat" end
+local baseBat=tbl3.Bat
+
+local tbl5={}
+local tbl6={name="火焰",color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,60,0)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(255,150,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,240,120))}),light=Color3.fromRGB(255,130,0)}
+local tbl8={name="冰霜",color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(80,190,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(245,255,255))}),light=Color3.fromRGB(140,220,255)}
+local tbl9={name="暗影",color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(30,0,50)),ColorSequenceKeypoint.new(1,Color3.fromRGB(190,90,255))}),light=Color3.fromRGB(150,60,255)}
+local tbl10={name="幻彩",color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),ColorSequenceKeypoint.new(0.2,Color3.fromRGB(255,200,0)),ColorSequenceKeypoint.new(0.4,Color3.fromRGB(0,255,90)),ColorSequenceKeypoint.new(0.6,Color3.fromRGB(0,200,255)),ColorSequenceKeypoint.new(0.8,Color3.fromRGB(120,0,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,180))}),light=Color3.fromRGB(200,120,255)}
+tbl5[1]=tbl6;tbl5[2]=tbl8;tbl5[3]=tbl9;tbl5[4]=tbl10
+local tbl12={}
+local trailNames={"无","火焰","冰霜","暗影","幻彩"}
+for _,v16 in ipairs(tbl5) do tbl12[v16.name]=v16 end
+
+local function fn14(arg) return arg:IsA("ParticleEmitter") or arg:IsA("Beam") end
+local function fn15(arg)
+        for _,child in ipairs(arg:GetChildren()) do
+                if child:GetAttribute("BeautifyVfx") then child:Destroy() end
+        end
+end
+local function fn16(arg,enabled)
+        for _,descendant in ipairs(arg:GetDescendants()) do
+                if fn14(descendant) and not descendant:GetAttribute("BeautifyVfx") then
+                        descendant.Enabled=enabled
+                end
+        end
+end
+local function fn17(parent,arg)
+        if not arg then return end
+        parent.TextureID=arg.textureId
+        parent.Color=arg.color
+        parent.Material=arg.material
+        fn15(parent)
+        fn16(parent,false)
+        local clone=arg.handle:Clone()
+        for _,descendant in ipairs(clone:GetDescendants()) do
+                descendant:SetAttribute("BeautifyVfx",true)
+        end
+        for _,child in ipairs(clone:GetChildren()) do
+                if not child:IsA("Sound") then child.Parent=parent end
+        end
+end
+
+local tbl14={BeautifyTrail=true,BeautifyLight=true,BeautifyHead=true,BeautifyTail=true}
+local function fn18(parent,arg)
+        local beautifyTrail=parent:FindFirstChild("BeautifyTrail")
+        if not arg then
+                for _,child in ipairs(parent:GetChildren()) do
+                        if tbl14[child.Name] then child:Destroy() end
+                end
+                return
+        end
+        local beautifyLight=parent:FindFirstChild("BeautifyLight")
+        if not beautifyTrail then
+                local attachment=Instance.new("Attachment")
+                attachment.Name="BeautifyHead"
+                attachment.Parent=parent
+                local attachment2=Instance.new("Attachment")
+                attachment2.Name="BeautifyTail"
+                attachment2.Parent=parent
+                beautifyTrail=Instance.new("Trail")
+                beautifyTrail.Name="BeautifyTrail"
+                beautifyTrail.Lifetime=0.3
+                beautifyTrail.FaceCamera=true
+                beautifyTrail.LightEmission=1
+                beautifyTrail.Attachment0=attachment
+                beautifyTrail.Attachment1=attachment2
+                beautifyTrail.Parent=parent
+        end
+        local n=parent.Size.Y*0.5
+        beautifyTrail.Attachment0.Position=Vector3.new(0,n,0)
+        beautifyTrail.Attachment1.Position=Vector3.new(0,-n,0)
+        beautifyTrail.Color=arg.color
+        beautifyTrail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(0.7,0.35),NumberSequenceKeypoint.new(1,1)})
+        if not beautifyLight then
+                beautifyLight=Instance.new("PointLight")
+                beautifyLight.Name="BeautifyLight"
+                beautifyLight.Range=12
+                beautifyLight.Brightness=2
+                beautifyLight.Parent=parent
+        end
+        beautifyLight.Color=arg.light
+end
+
+local function fn19()
+        local character=LP.Character
+        if not character then return nil end
+        for _,child in ipairs(character:GetChildren()) do
+                if child:IsA("Tool") and child:GetAttribute("IsBat")==true then
+                        return child
+                end
+        end
+        return nil
+end
+
+local function fn20()
+        if not State.beautify then return nil end
+        local v16=fn19()
+        return v16 and v16:FindFirstChild("Handle")
+end
+
+local v16=nil
+local v17=nil
+local v18=nil
+local function fn21()
+        local v19=fn20()
+        if v16 and v16~=v19 then
+                if baseBat then fn17(v16,baseBat) end
+                fn16(v16,true)
+                fn18(v16,nil)
+        end
+        v16=v19
+        if v19 then
+                fn17(v19,tbl3[State.skin] or baseBat)
+                fn18(v19,tbl12[State.trail])
+        end
+end
+
+task.spawn(function()
+        while true do
+                task.wait(0.2)
+                if fn20()~=v16 or State.skin~=v17 or State.trail~=v18 then
+                        v17=State.skin
+                        v18=State.trail
+                        fn21()
+                end
+        end
+end)
+
+local espFolder=workspace:FindFirstChild("PaperEggESP")
+if not espFolder then
+        espFolder=Instance.new("Folder")
+        espFolder.Name="PaperEggESP"
+        espFolder.Parent=workspace
+end
+local espCache={}
+
+local petCN={Chicken="鸡",Dog="狗",Duckling="小鸭",Frog="青蛙",Jerboa="跳鼠",Bird="小鸟",Catfish="鲶鱼",Fennec="耳廓狐",["Burrowing Owl"]="穴鸮",Camel="骆驼",Chimpanzee="黑猩猩",Dodo="渡渡鸟",["Lava Gecko"]="熔岩壁虎",Parrotfish="鹦嘴鱼",Penguin="企鹅",Raccoon="浣熊",Toucan="巨嘴鸟",["Tung Tung Sahur"]="通通萨胡尔",Turtle="乌龟",["Bananita Dolphinita"]="香蕉海豚",Bear="熊",Centapede="蜈蚣",Crane="鹤",Crocodile="鳄鱼",Fox="狐狸",["Lava Frog"]="熔岩蛙",Swan="天鹅",Swordfish="剑鱼",["Tob Tobi Tob Tob"]="托布托比",["Trulimero Trulicina"]="特鲁利",Walrus="海象",Axolotl="美西螈",["Baby Aurora Dragon"]="极光幼龙",["Brr Brr Patapim"]="布鲁帕塔",["Cosmic Gecko"]="宇宙壁虎",Crustacia="甲壳兽",["Flaming Bull"]="烈焰公牛",Gorilla="大猩猩",["Lava Iguana"]="熔岩鬣蜥",["Mecha Scorpio"]="机械天蝎",["Orangutini Ananassini"]="猩猩",["Polar Bear"]="北极熊",Pterodactyl="翼龙",Salamander="火蜥蜴",Scorpio="天蝎",Shark="鲨鱼",Snake="蛇",Spideron="蜘蛛兽",Ankylosaurus="甲龙",["Belula Beluga"]="白鲸",Bladehide="刃皮兽",["Chillin Chilli"]="冰辣椒",["Cosmic Gorilla"]="宇宙猩猩",Froggo="蛙蛙",Mammoth="猛犸象",["Mecha Froggo"]="机械蛙",Orca="虎鲸",["Red Panda"]="小熊猫",["Sabertooth Tiger"]="剑齿虎",["Sand Spider"]="沙蛛",Scorpion="蝎子",["Shadow Dragon"]="暗影龙",Spider="蜘蛛",Tiger="老虎",["Beluga Whale"]="白鲸",Bronto="雷龙",Crawler="爬行者",["Demon Imp"]="恶魔小鬼",Drilla="钻头兽",Hellhound="地狱犬",["King Mammoth"]="猛犸王",Koi="锦鲤",["La Vacca Saturno Saturnita"]="土星牛",Leviathan="利维坦",["Mangolini Parrochini"]="鹦鹉",Mantaris="蝠鲼",["Mecha Crawler"]="机械爬行者",Rhinotaur="犀牛人",["Royal Sphinx"]="皇家狮身人面",["Snowy Owl"]="雪鸮",Triceratops="三角龙",["Whale Shark"]="鲸鲨",["Bombo Croco"]="鳄鱼",Cerberus="地狱三头犬",["Cosmic Dragon"]="宇宙龙",["Cosmic Skeleton Boss"]="宇宙骷髅王",Crocodon="鳄龙",["Ember Dragon"]="余烬龙",Gargoyle="石像鬼",["King Snake"]="蛇王",Kraken="克拉肯",["Mecha Crocodon"]="机械鳄龙",Minotaur="牛头人",["Mutant Shark"]="变异鲨",["Scorched Dragon"]="焦灼龙",Stag="雄鹿",TRex="霸王龙",Tralaledon="特拉雷顿",Yeti="雪人",Balrog="炎魔",["El Maja"]="玛雅",["Eternal Lunar Dragon"]="永恒月龙",["Gorilla King"]="猩猩王",["Ice Dragon"]="冰龙",Krakenoid="克拉肯诺",["Lava Dragon"]="熔岩龙",["Mecha Krakenoid"]="机械克拉肯诺",Mosasaurus="沧龙",["Oni Tiger"]="鬼虎",Phoenix="凤凰",["Strawberry Elephant"]="草莓象",["Void Dragon"]="虚空龙",Aetheron="以太龙",ArchAngel="大天使",["Archdemon Dragon"]="大恶魔龙",Cthulhu="克苏鲁",Dreadscale="恐怖鳞",Kitsune="九尾狐",["Luminous Cthulhu"]="光辉克苏鲁",["Mecha Dreadscale"]="机械恐怖鳞",Nightflame="夜焰",["Shattered Colossus"]="破碎巨像",Unicorn="独角兽",["World Burner"]="焚世者"}
+
+local function cnName(raw)
+        if not raw or raw=="" then return "未知" end
+        return petCN[raw] or raw
+end
+local function cnRarity(raw)
+        if not raw or raw=="" then return "未知" end
+        return rarityCN[raw] or raw
+end
+
+local function pickIcon(entry)
+        if not entry then return nil end
+        local keys={"Icon","ImageId","Thumbnail","AssetId","IconId","Image","Portrait","ImageID","IconImage"}
+        for _,k in ipairs(keys) do
+                local v=entry[k]
+                if type(v)=="string" and v~="" then
+                        if v:find("rbxassetid://") or v:find("rbxasset://") then return v end
+                        if v:match("^%d+$") then return "rbxassetid://"..v end
+                end
+        end
+        if entry.Rarity then
+                for _,k in ipairs(keys) do
+                        local v=entry.Rarity[k]
+                        if type(v)=="string" and v~="" then
+                                if v:find("rbxassetid://") or v:find("rbxasset://") then return v end
+                                if v:match("^%d+$") then return "rbxassetid://"..v end
+                        end
+                end
+        end
+        return nil
+end
+
+local function makeMarker()
+        local part=Instance.new("Part")
+        part.Name="PaperEggPart"
+        part.Size=Vector3.new(3,3,3)
+        part.Transparency=1
+        part.CanCollide=false
+        part.CanQuery=false
+        part.CanTouch=false
+        part.Anchored=true
+        part.Parent=espFolder
+
+        local bb=Instance.new("BillboardGui")
+        bb.Name="BB"
+        bb.AlwaysOnTop=true
+        bb.Size=UDim2.fromOffset(240,64)
+        bb.StudsOffsetWorldSpace=Vector3.new(0,3,0)
+        bb.MaxDistance=500
+        bb.LightInfluence=0
+
+        local frame=Instance.new("Frame")
+        frame.Size=UDim2.fromScale(1,1)
+        frame.BackgroundColor3=Color3.fromRGB(16,18,26)
+        frame.BackgroundTransparency=0.1
+        frame.BorderSizePixel=0
+        frame.Parent=bb
+
+        local corner=Instance.new("UICorner")
+        corner.CornerRadius=UDim.new(0,10)
+        corner.Parent=frame
+
+        local stroke=Instance.new("UIStroke")
+        stroke.Color=Color3.fromRGB(0,210,255)
+        stroke.Thickness=1.2
+        stroke.Transparency=0.15
+        stroke.Parent=frame
+
+        local iconFrame=Instance.new("Frame")
+        iconFrame.Name="IconFrame"
+        iconFrame.Size=UDim2.fromOffset(48,48)
+        iconFrame.Position=UDim2.new(0,8,0.5,-24)
+        iconFrame.BackgroundColor3=Color3.fromRGB(28,32,44)
+        iconFrame.BorderSizePixel=0
+        iconFrame.Parent=frame
+
+        local iconCorner=Instance.new("UICorner")
+        iconCorner.CornerRadius=UDim.new(0,8)
+        iconCorner.Parent=iconFrame
+
+        local iconImage=Instance.new("ImageLabel")
+        iconImage.Name="IconImage"
+        iconImage.Size=UDim2.fromScale(1,1)
+        iconImage.BackgroundTransparency=1
+        iconImage.ScaleType=Enum.ScaleType.Fit
+        iconImage.Image=""
+        iconImage.Parent=iconFrame
+
+        local iconCorner2=Instance.new("UICorner")
+        iconCorner2.CornerRadius=UDim.new(0,8)
+        iconCorner2.Parent=iconImage
+
+        local nameLabel=Instance.new("TextLabel")
+        nameLabel.Name="NameLabel"
+        nameLabel.Size=UDim2.new(1,-68,0,22)
+        nameLabel.Position=UDim2.new(0,62,0,5)
+        nameLabel.BackgroundTransparency=1
+        nameLabel.Font=Enum.Font.GothamBold
+        nameLabel.TextSize=15
+        nameLabel.TextXAlignment=Enum.TextXAlignment.Left
+        nameLabel.TextColor3=Color3.fromRGB(255,255,255)
+        nameLabel.TextTruncate=Enum.TextTruncate.AtEnd
+        nameLabel.Text=""
+        nameLabel.Parent=frame
+
+        local infoLabel=Instance.new("TextLabel")
+        infoLabel.Name="InfoLabel"
+        infoLabel.Size=UDim2.new(1,-68,0,16)
+        infoLabel.Position=UDim2.new(0,62,0,26)
+        infoLabel.BackgroundTransparency=1
+        infoLabel.Font=Enum.Font.GothamMedium
+        infoLabel.TextSize=12
+        infoLabel.TextXAlignment=Enum.TextXAlignment.Left
+        infoLabel.TextColor3=Color3.fromRGB(190,210,230)
+        infoLabel.Text=""
+        infoLabel.Parent=frame
+
+        local stateLabel=Instance.new("TextLabel")
+        stateLabel.Name="StateLabel"
+        stateLabel.Size=UDim2.new(1,-68,0,14)
+        stateLabel.Position=UDim2.new(0,62,0,42)
+        stateLabel.BackgroundTransparency=1
+        stateLabel.Font=Enum.Font.Gotham
+        stateLabel.TextSize=11
+        stateLabel.TextXAlignment=Enum.TextXAlignment.Left
+        stateLabel.TextColor3=Color3.fromRGB(140,155,175)
+        stateLabel.Text=""
+        stateLabel.Parent=frame
+
+        bb.Adornee=part
+        bb.Parent=part
+
+        return {Part=part,BB=bb,Frame=frame,Stroke=stroke,IconFrame=iconFrame,IconImage=iconImage,NameLabel=nameLabel,InfoLabel=infoLabel,StateLabel=stateLabel}
+end
+
+local function clearESP()
+        for uid,marker in pairs(espCache) do
+                if marker.Part and marker.Part.Parent then marker.Part:Destroy() end
+                espCache[uid]=nil
+        end
+end
+
+local function updateESP()
+        if not State.eggESP then
+                if next(espCache) then clearESP() end
+                return
+        end
+        local ok,result=pcall(function() return EggState.ReadFieldEggs() end)
+        if not ok or type(result)~="table" then return end
+        local records=result.Records or result
+        if type(records)~="table" then return end
+        local seen={}
+        for _,record in ipairs(records) do
+                local uid=record.Uid
+                if uid then
+                        seen[uid]=true
+                        local marker=espCache[uid]
+                        if not marker or not marker.Part or not marker.Part.Parent then
+                                marker=makeMarker()
+                                espCache[uid]=marker
+                        end
+                        local position=record.BottomCFrame and record.BottomCFrame.Position
+                        if position then marker.Part.CFrame=CFrame.new(position) end
+                        local entry=Assets.Directory and Assets.Directory[record.AssetCategory]
+                        local rawName=entry and (entry.DisplayName or entry.Name) or record.AssetCategory or "未知"
+                        local petName=cnName(rawName)
+                        local rarityName="未知"
+                        local rarityColor=Color3.fromRGB(200,210,220)
+                        if entry and entry.Rarity then
+                                rarityName=cnRarity(entry.Rarity.DisplayName or entry.Rarity.Name)
+                                if entry.Rarity.Color then rarityColor=entry.Rarity.Color end
+                        end
+                        marker.NameLabel.Text=petName
+                        if State.eggESPInfo then
+                                local value
+                                if entry then
+                                        for _,k in ipairs({"Value","Price","Cost","SellPrice","Worth","Gold","Coins"}) do
+                                                if entry[k]~=nil then value=entry[k] break end
+                                        end
+                                        if value==nil and entry.Rarity and entry.Rarity.Value~=nil then value=entry.Rarity.Value end
+                                end
+                                local valueText=value~=nil and tostring(value) or "?"
+                                marker.InfoLabel.Text=string.format("%s · 价值 %s",rarityName,valueText)
+                                marker.InfoLabel.TextColor3=rarityColor
+                                marker.InfoLabel.Visible=true
+                        else marker.InfoLabel.Visible=false end
+                        if State.eggESPState then
+                                marker.StateLabel.Text=string.format("状态: %s",tostring(record.State or "?"))
+                                marker.StateLabel.Visible=true
+                        else marker.StateLabel.Visible=false end
+                        if State.eggESPIcon then
+                                local icon=pickIcon(entry)
+                                marker.IconFrame.Visible=true
+                                marker.IconImage.Image=icon or ""
+                        else marker.IconFrame.Visible=false end
+                        marker.Stroke.Color=rarityColor
+                end
+        end
+        for uid,marker in pairs(espCache) do
+                if not seen[uid] then
+                        if marker.Part then marker.Part:Destroy() end
+                        espCache[uid]=nil
+                end
+        end
+end
+
+task.spawn(function()
+        while true do
+                task.wait(0.3)
+                pcall(updateESP)
+        end
+end)
+
+task.spawn(function()
+        while true do
+                task.wait(0.1)
+                if State.noCollide then
+                        local character=LP.Character
+                        if character then
+                                for _,child in ipairs(character:GetChildren()) do
+                                        if child:IsA("BasePart") and child.CanCollide then child.CanCollide=false end
+                                end
+                        end
+                end
+        end
+end)
+
+task.spawn(function()
+        while true do
+                task.wait(0.1)
+                if not State.autoSteal or flag then continue end
+                local v6=fn8()
+                if not v6 then continue end
+                fn9(v6.BottomCFrame.Position+vector)
+                local grabbed=false
+                for i=1,3 do
+                        if fn10(v6) then grabbed=true break end
+                        local hrp=fn7()
+                        if hrp then
+                                hrp.CFrame=CFrame.new(v6.BottomCFrame.Position+Vector3.new(0,2.5,0))
+                        end
+                        task.wait(0.2)
+                end
+                if grabbed then
+                        fn12()
+                        continue
+                end
+                task.wait(0.5)
+        end
+end)
+
+local Window=zhiUI:CreateWindow({Title="纸.偷一颗蛋"})
+
+local StealTab=Window:AddTab("偷蛋")
+StealTab:AddToggle("自动偷蛋",State.autoSteal,function(v)
+        State.autoSteal=v
+        if v then zhiUI:Notify("纸.偷一颗蛋","自动偷蛋已开启",2) end
+end)
+StealTab:AddMultiDropdown("选择区域",fn2(),{},function(selected)
+        local map={}
+        for _,v in ipairs(selected) do map[v]=true end
+        State.areas=map
+end)
+StealTab:AddMultiDropdown("选择稀有度",fn3(),{},function(selected)
+        local map={}
+        for _,v in ipairs(selected) do map[v]=true end
+        State.rarities=map
+end)
+StealTab:AddSlider("飞行速度",50,1000,State.tweenSpeed,function(v) State.tweenSpeed=v end)
+StealTab:AddToggle("按自己速度飞行",State.useOwnSpeed,function(v) State.useOwnSpeed=v end)
+StealTab:AddSlider("固定飞行高度",30,300,State.flightY,function(v) State.flightY=v end)
+StealTab:AddDivider()
+
+local AntiTab=Window:AddTab("防打")
+AntiTab:AddToggle("防蛋掉落（掉地自动飞回重拿）",State.antiEggDrop,function(v)
+        State.antiEggDrop=v
+        AntiDrop.enabled=v
+        if not v then AntiDrop.lockedUid=nil end
+end)
+AntiTab:AddToggle("Anti Hit（链式瞬移躲攻击）",State.antiHit,function(v) State.antiHit=v end)
+AntiTab:AddToggle("角色穿墙",State.noCollide,function(v) State.noCollide=v end)
+AntiTab:AddDivider()
+
+local skinDict={["原版"]="原版"}
+for _,name in ipairs(skinNames) do
+        if name~="原版" then
+                local display=batCN[name] or name
+                if skinDict[display] then display=display.." ("..name..")" end
+                skinDict[display]=name
+        end
+end
+local trailDict={}
+for _,name in ipairs(trailNames) do trailDict[name]=name end
+
+local BatTab=Window:AddTab("球棒")
+BatTab:AddToggle("启用球棒美化",State.beautify,function(v)
+        State.beautify=v
+        fn21()
+end)
+BatTab:AddDropdown("选择球棒皮肤",(function()
+        local t={}
+        for k in pairs(skinDict) do t[#t+1]=k end
+        table.sort(t)
+        return t
+end)(),function(v)
+        State.skin=skinDict[v] or v
+end)
+BatTab:AddDropdown("选择挥击拖尾",trailNames,function(v) State.trail=v end)
+BatTab:AddDivider()
+
+local EspTab=Window:AddTab("蛋透视")
+EspTab:AddToggle("显示蛋内宠物",State.eggESP,function(v) State.eggESP=v end)
+EspTab:AddToggle("显示稀有度 / 价值",State.eggESPInfo,function(v) State.eggESPInfo=v end)
+EspTab:AddToggle("显示蛋状态",State.eggESPState,function(v) State.eggESPState=v end)
+EspTab:AddToggle("显示宠物头像",State.eggESPIcon,function(v) State.eggESPIcon=v end)
+
+AntiDrop.enabled=State.antiEggDrop
+
+zhiUI:Notify("纸.偷一颗蛋","脚本加载完成！",3)
