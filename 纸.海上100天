@@ -1,1 +1,1236 @@
-.
+local zhiUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/yda66722-hash/zhiUI/refs/heads/main/zhiUI"))()
+
+local players = game:GetService("Players")
+local runService = game:GetService("RunService")
+local userInputService = game:GetService("UserInputService")
+
+local localPlayer = players.LocalPlayer
+
+local window = zhiUI:CreateWindow({
+  Title = "纸.海上100天",
+})
+
+local TeleportTab = window:AddTab("传送")
+local BringTab    = window:AddTab("拉取")
+local CombatTab   = window:AddTab("战斗")
+local ESPTab      = window:AddTab("透视")
+local MiscTab     = window:AddTab("杂项")
+
+local creatureList = {
+  { Display = "布库布库（大嘴怪）",  Pattern = "Buku Buku" },
+  { Display = "布库波库（小嘴怪）",  Pattern = "Buku Poku" },
+  { Display = "螃蟹",                Pattern = "Crab" },
+  { Display = "海鸥",                Pattern = "Seagull" },
+  { Display = "幽灵海盗",            Pattern = "GhostPirate" },
+}
+
+local creatureDisplayList = {}
+for _, v in pairs(creatureList) do
+  table.insert(creatureDisplayList, v.Display)
+end
+
+local selectedCreatureDisplay = nil
+
+local function f5(p8)
+  for _, value in pairs(workspace:GetDescendants()) do
+    if value:IsA("Model") and value.Name == p8 then
+      return value
+    end
+  end
+  return nil
+end
+
+TeleportTab:AddDropdown("选择要传送到的生物", creatureDisplayList, function(v)
+  selectedCreatureDisplay = v
+end)
+
+TeleportTab:AddButton("传送到生物", function()
+  if not selectedCreatureDisplay then
+    zhiUI:Notify("错误", "未选择生物。请先在下拉框中选择一个生物。", 3)
+    return
+  end
+
+  local pattern = nil
+  for _, item in pairs(creatureList) do
+    if item.Display == selectedCreatureDisplay then
+      pattern = item.Pattern
+      break
+    end
+  end
+  if not pattern then
+    zhiUI:Notify("错误", "未找到生物匹配模式", 2)
+    return
+  end
+
+  local char = players.LocalPlayer.Character
+  if not char then
+    zhiUI:Notify("错误", "未找到角色", 2)
+    return
+  end
+
+  local hrp = char:FindFirstChild("HumanoidRootPart")
+  if not hrp then
+    zhiUI:Notify("错误", "未找到根部件", 2)
+    return
+  end
+
+  local model = f5(pattern)
+  if not model then
+    zhiUI:Notify("错误", "游戏中未找到生物 '" .. selectedCreatureDisplay .. "'", 2)
+    return
+  end
+
+  local position = nil
+  for _, c in pairs(model:GetChildren()) do
+    if c:IsA("BasePart") then
+      position = c.Position
+      break
+    end
+  end
+  if not position then
+    pcall(function() position = model:GetPivot().Position end)
+  end
+  if not position then
+    zhiUI:Notify("错误", "无法找到生物位置", 2)
+    return
+  end
+
+  hrp.CFrame = CFrame.new(position + Vector3.new(0, 3, 2))
+  zhiUI:Notify("已传送", "已传送到 " .. selectedCreatureDisplay, 2)
+end)
+
+local function f7(p9)
+  for _, value4 in pairs(workspace:GetDescendants()) do
+    if value4:IsA("Model") and value4.Name == p9 then
+      return value4
+    end
+  end
+  return nil
+end
+
+local v17 = {
+  { Display = "战士宝箱",       Pattern = "Warrior Chest" },
+  { Display = "大型幸存者宝箱", Pattern = "LargeChest_Survivor" },
+  { Display = "小型幸存者宝箱", Pattern = "SmallChest_Survivor" },
+  { Display = "宝箱",           Pattern = "Chest" },
+  { Display = "海盗宝箱",       Pattern = "Pirate Chest" },
+  { Display = "渔夫宝箱",       Pattern = "Fishermans Chest" },
+  { Display = "任务宝箱",       Pattern = "Quest Chest" },
+}
+
+local chestDisplayList = {}
+for _, v in pairs(v17) do
+  table.insert(chestDisplayList, v.Display)
+end
+
+local selectedChestDisplay = nil
+
+TeleportTab:AddDropdown("选择要传送到的宝箱", chestDisplayList, function(v)
+  selectedChestDisplay = v
+end)
+
+TeleportTab:AddButton("传送到宝箱", function()
+  if not selectedChestDisplay then
+    zhiUI:Notify("错误", "未选择宝箱。请先在下拉框中选择一个宝箱。", 3)
+    return
+  end
+
+  local char = players.LocalPlayer.Character
+  if not char then
+    zhiUI:Notify("错误", "未找到角色", 2)
+    return
+  end
+
+  local hrp = char:FindFirstChild("HumanoidRootPart")
+  if not hrp then
+    zhiUI:Notify("错误", "未找到根部件", 2)
+    return
+  end
+
+  local pattern = nil
+  for _, value7 in pairs(v17) do
+    if value7.Display == selectedChestDisplay then
+      pattern = value7.Pattern
+      break
+    end
+  end
+  if not pattern then
+    zhiUI:Notify("错误", "未找到宝箱匹配模式", 2)
+    return
+  end
+
+  local chest = f7(pattern)
+  if not chest then
+    zhiUI:Notify("错误", "游戏中未找到宝箱 '" .. pattern .. "'", 2)
+    return
+  end
+
+  local position = nil
+  for _, c in pairs(chest:GetChildren()) do
+    if c:IsA("BasePart") then
+      position = c.Position
+      break
+    end
+  end
+  if not position then
+    pcall(function() position = chest:GetPivot().Position end)
+  end
+  if not position then
+    zhiUI:Notify("错误", "无法找到宝箱位置", 2)
+    return
+  end
+
+  hrp.CFrame = CFrame.new(position + Vector3.new(0, 3, 2))
+  zhiUI:Notify("已传送", "已传送到 " .. selectedChestDisplay, 2)
+end)
+
+TeleportTab:AddButton("传送到篝火", function()
+  local char = players.LocalPlayer.Character
+  if not char then
+    zhiUI:Notify("错误", "未找到角色", 2)
+    return
+  end
+  local hrp = char:FindFirstChild("HumanoidRootPart")
+  if not hrp then
+    zhiUI:Notify("错误", "未找到根部件", 2)
+    return
+  end
+
+  local done = false
+  for _, v in pairs(workspace:GetDescendants()) do
+    if v:IsA("Model") and v.Name == "Bonfire" then
+      local part = v:FindFirstChild("Part") or v:FindFirstChild("BasePart")
+        or v:FindFirstChildWhichIsA("BasePart")
+      if part then
+        hrp.CFrame = part.CFrame + Vector3.new(0, 3, 2)
+        done = true
+        zhiUI:Notify("已传送", "已传送到篝火", 2)
+        break
+      end
+    end
+  end
+
+  if not done then
+    for _, v in pairs(workspace:GetDescendants()) do
+      if v:IsA("BasePart") and v.Name == "Bonfire" then
+        hrp.CFrame = v.CFrame + Vector3.new(0, 3, 2)
+        done = true
+        zhiUI:Notify("已传送", "已传送到篝火", 2)
+        break
+      end
+    end
+  end
+
+  if not done then
+    zhiUI:Notify("错误", "未找到篝火", 2)
+  end
+end)
+
+TeleportTab:AddButton("传送到商人", function()
+  local char = players.LocalPlayer.Character
+  if not char then
+    zhiUI:Notify("错误", "未找到角色", 2)
+    return
+  end
+  local hrp = char:FindFirstChild("HumanoidRootPart")
+  if not hrp then
+    zhiUI:Notify("错误", "未找到根部件", 2)
+    return
+  end
+
+  local done = false
+  for _, v in pairs(workspace:GetDescendants()) do
+    if v:IsA("Model") and v.Name == "Merchant" then
+      local t = v:FindFirstChild("HumanoidRootPart")
+        or v:FindFirstChild("Head") or v:FindFirstChildWhichIsA("BasePart")
+      if t then
+        hrp.CFrame = t.CFrame + Vector3.new(0, 3, 2)
+        done = true
+        zhiUI:Notify("已传送", "已传送到商人", 2)
+        break
+      end
+    end
+  end
+
+  if not done then
+    for _, v in pairs(workspace:GetDescendants()) do
+      if v:IsA("BasePart") and v.Name == "Merchant" then
+        hrp.CFrame = v.CFrame + Vector3.new(0, 3, 2)
+        done = true
+        zhiUI:Notify("已传送", "已传送到商人", 2)
+        break
+      end
+    end
+  end
+
+  if not done then
+    zhiUI:Notify("错误", "商人尚未生成", 2)
+  end
+end)
+
+TeleportTab:AddButton("传送到渔夫", function()
+  local char = players.LocalPlayer.Character
+  if not char then
+    zhiUI:Notify("错误", "未找到角色", 2)
+    return
+  end
+  local hrp = char:FindFirstChild("HumanoidRootPart")
+  if not hrp then
+    zhiUI:Notify("错误", "未找到根部件", 2)
+    return
+  end
+
+  local done = false
+  local islandContainer = workspace:FindFirstChild("IslandContainer")
+  if islandContainer then
+    local tutorialIsland = islandContainer:FindFirstChild("TutorialIsland")
+    if tutorialIsland then
+      local fisherman = tutorialIsland:FindFirstChild("Fisherman")
+      if fisherman and fisherman:IsA("Model") then
+        local t = fisherman:FindFirstChild("HumanoidRootPart")
+          or fisherman:FindFirstChild("Head")
+          or fisherman:FindFirstChildWhichIsA("BasePart")
+        if t then
+          hrp.CFrame = t.CFrame + Vector3.new(0, 3, 2)
+          done = true
+          zhiUI:Notify("已传送", "已传送到渔夫", 2)
+        else
+          pcall(function()
+            hrp.CFrame = CFrame.new(fisherman:GetPivot().Position + Vector3.new(0, 3, 2))
+            done = true
+            zhiUI:Notify("已传送", "已传送到渔夫", 2)
+          end)
+        end
+      end
+    end
+  end
+
+  if not done then
+    zhiUI:Notify("错误", "未找到渔夫", 2)
+  end
+end)
+
+local v25 = {
+  { Display = "破损板条箱", Pattern = "BrokenCrate" },
+  { Display = "汽车电池",   Pattern = "CarBattery" },
+  { Display = "汽油罐",     Pattern = "GasCan" },
+  { Display = "废金属",     Pattern = "ScrapMetal" },
+  { Display = "托盘",       Pattern = "Pallet" },
+  { Display = "木板",       Pattern = "Plank" },
+  { Display = "土豆",       Pattern = "Potato" },
+  { Display = "螺旋桨",     Pattern = "Propellor" },
+  { Display = "炖菜",       Pattern = "Stew" },
+  { Display = "凳子",       Pattern = "Stool" },
+  { Display = "寿司",       Pattern = "Sushi" },
+  { Display = "烤鸟",       Pattern = "Bird" },
+  { Display = "鱼片",       Pattern = "FishFillet" },
+  { Display = "肉",         Pattern = "Meat" },
+  { Display = "蟹肉棒",     Pattern = "CrabSticks" },
+  { Display = "橙子",       Pattern = "Orange" },
+  { Display = "鱿鱼",       Pattern = "Calamari" },
+  { Display = "砍刀",       Pattern = "Machete" },
+  { Display = "医疗包",     Pattern = "Medkit" },
+  { Display = "绷带",       Pattern = "Bandage" },
+  { Display = "古老石板",   Pattern = "AncientTablet" },
+  { Display = "任务钥匙",   Pattern = "Key" },
+}
+
+local itemDisplayList = {}
+for _, v in pairs(v25) do
+  table.insert(itemDisplayList, v.Display)
+end
+
+local bringPatterns = { "BrokenCrate" }
+
+BringTab:AddMultiDropdown("选择要拉取的物品", itemDisplayList, { itemDisplayList[1] }, function(selectedDisplays)
+  bringPatterns = {}
+  for _, display in ipairs(selectedDisplays) do
+    for _, item in pairs(v25) do
+      if item.Display == display then
+        table.insert(bringPatterns, item.Pattern)
+        break
+      end
+    end
+  end
+end)
+
+BringTab:AddButton("拉取物品", function()
+  if not bringPatterns or #bringPatterns == 0 then
+    zhiUI:Notify("错误", "未选择物品", 2)
+    return
+  end
+
+  local char = players.LocalPlayer.Character
+  if not char then
+    zhiUI:Notify("错误", "未找到角色", 2)
+    return
+  end
+  local hrp = char:FindFirstChild("HumanoidRootPart")
+  if not hrp then
+    zhiUI:Notify("错误", "未找到根部件", 2)
+    return
+  end
+
+  local position = hrp.Position
+  local debrisField = workspace:FindFirstChild("DebrisField")
+  if not debrisField then
+    zhiUI:Notify("错误", "未找到 DebrisField", 2)
+    return
+  end
+
+  local list = {}
+  for _, folder in pairs(debrisField:GetChildren()) do
+    if folder:IsA("Folder") or folder:IsA("Model") then
+      for _, part in pairs(folder:GetChildren()) do
+        if part:IsA("BasePart") then
+          for _, pat in pairs(bringPatterns) do
+            if string.find(part.Name, pat) == 1 then
+              table.insert(list, part)
+              break
+            end
+          end
+        end
+      end
+    end
+  end
+
+  if #list == 0 then
+    zhiUI:Notify("错误", "未找到物品", 2)
+    return
+  end
+
+  local count = 0
+  for _, v in pairs(list) do
+    pcall(function()
+      v.Position = position + Vector3.new(math.random(-5, 5), math.random(1, 5), math.random(-5, 5))
+      v.Velocity = Vector3.new(0, 0, 0)
+      count = count + 1
+    end)
+  end
+
+  zhiUI:Notify("拉取完成", "已拉取 " .. count .. " 个物品", 3)
+end)
+
+local clickKillEnabled = false
+local connect3
+local f12
+
+local function f13(model)
+  if not (model and model:IsA("Model")) then return false end
+  if not model:FindFirstChildOfClass("Humanoid") then return false end
+  if f12(model) then return false end
+  return true
+end
+
+function f12(model)
+  if not model or not model:IsA("Model") then return false end
+  for _, plr in pairs(players:GetPlayers()) do
+    local c = plr.Character
+    if c and (model == c or model:IsDescendantOf(c) or c:IsDescendantOf(model)) then
+      return true
+    end
+  end
+  return false
+end
+
+CombatTab:AddToggle("点击秒杀NPC", false, function(state)
+  clickKillEnabled = state
+
+  if state then
+    if connect3 then connect3:Disconnect() end
+    local getMouse = localPlayer:GetMouse()
+    connect3 = getMouse.Button1Down:Connect(function()
+      if not clickKillEnabled then return end
+      local target = getMouse.Target
+      if not target or not target:IsA("BasePart") then return end
+
+      local model = target:FindFirstAncestorOfClass("Model")
+      if not model or not f13(model) then return end
+
+      local hum = model:FindFirstChildOfClass("Humanoid")
+      if hum then
+        pcall(function()
+          hum.HipHeight = math.huge
+          zhiUI:Notify("已击杀", "已移除 " .. model.Name, 1.5)
+        end)
+      end
+    end)
+
+    zhiUI:Notify("点击击杀", "已启用 - 点击任意NPC将其击杀", 2)
+  else
+    if connect3 then
+      connect3:Disconnect()
+      connect3 = nil
+    end
+    zhiUI:Notify("点击击杀", "已禁用", 1.5)
+  end
+end)
+
+CombatTab:AddButton("使用说明", function()
+  zhiUI:Notify("提示",
+    "为获得最佳效果，强烈建议在单人战局中使用此功能。秒杀机制依赖于对NPC拥有完整的网络所有权，多人在线环境下效果可能无法正确生效。", 5)
+end)
+
+local espPatterns = { "BrokenCrate" }
+local espEnabled = false
+local espObjects = {}
+
+local function f14(part)
+  if not part or not part:IsA("BasePart") then return end
+
+  local highlight = Instance.new("Highlight")
+  highlight.Adornee = part
+  highlight.FillColor = Color3.new(0, 1, 0)
+  highlight.FillTransparency = 0.4
+  highlight.OutlineColor = Color3.new(0, 1, 0)
+  highlight.OutlineTransparency = 0
+  highlight.Parent = part
+
+  local bb = Instance.new("BillboardGui")
+  bb.Adornee = part
+  bb.Size = UDim2.new(0, 100, 0, 30)
+  bb.StudsOffset = Vector3.new(0, 3, 0)
+  bb.Parent = part
+
+  local lbl = Instance.new("TextLabel")
+  lbl.Size = UDim2.new(1, 0, 1, 0)
+  lbl.BackgroundTransparency = 1
+  lbl.Text = part.Name
+  lbl.TextColor3 = Color3.new(1, 1, 1)
+  lbl.TextScaled = true
+  lbl.Font = Enum.Font.GothamBold
+  lbl.Parent = bb
+
+  return { Highlight = highlight, Billboard = bb, TextLabel = lbl }
+end
+
+local function f15(part)
+  if espObjects[part] then
+    local o = espObjects[part]
+    if o.Highlight then o.Highlight:Destroy() end
+    if o.Billboard then o.Billboard:Destroy() end
+    espObjects[part] = nil
+  end
+end
+
+local function clearESP()
+  local keys = {}
+  for k in pairs(espObjects) do table.insert(keys, k) end
+  for _, k in ipairs(keys) do f15(k) end
+end
+
+local function UpdateESP()
+  clearESP()
+  if not espEnabled or not espPatterns or #espPatterns == 0 then return end
+
+  local debrisField = workspace:FindFirstChild("DebrisField")
+  if not debrisField then return end
+
+  local count = 0
+  for _, folder in pairs(debrisField:GetChildren()) do
+    if folder:IsA("Folder") or folder:IsA("Model") then
+      for _, part in pairs(folder:GetChildren()) do
+        if part:IsA("BasePart") then
+          for _, pat in pairs(espPatterns) do
+            if string.find(part.Name, pat) == 1 then
+              if not espObjects[part] then
+                espObjects[part] = f14(part)
+                count = count + 1
+              end
+              break
+            end
+          end
+        end
+      end
+    end
+  end
+
+  if count > 0 then
+    zhiUI:Notify("透视已更新", "正在高亮 " .. count .. " 个物品", 2)
+  else
+    zhiUI:Notify("未找到物品", "未找到要高亮的物品", 2)
+  end
+end
+
+ESPTab:AddMultiDropdown("选择要透视的物品", itemDisplayList, { itemDisplayList[1] }, function(selectedDisplays)
+  espPatterns = {}
+  for _, display in ipairs(selectedDisplays) do
+    for _, item in pairs(v25) do
+      if item.Display == display then
+        table.insert(espPatterns, item.Pattern)
+        break
+      end
+    end
+  end
+  if espEnabled then
+    UpdateESP()
+  end
+end)
+
+local connect4
+
+ESPTab:AddToggle("启用透视", false, function(state)
+  espEnabled = state
+
+  if state then
+    UpdateESP()
+
+    if connect4 then connect4:Disconnect() end
+    connect4 = runService.Heartbeat:Connect(function()
+      if espEnabled and espPatterns and #espPatterns > 0 then
+        local debrisField = workspace:FindFirstChild("DebrisField")
+        if debrisField then
+          for _, folder in pairs(debrisField:GetChildren()) do
+            if folder:IsA("Folder") or folder:IsA("Model") then
+              for _, part in pairs(folder:GetChildren()) do
+                if part:IsA("BasePart") then
+                  for _, pat in pairs(espPatterns) do
+                    if string.find(part.Name, pat) == 1 and not espObjects[part] then
+                      espObjects[part] = f14(part)
+                      break
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end)
+
+    zhiUI:Notify("透视已启用", "透视已开启", 2)
+  else
+    clearESP()
+    if connect4 then
+      connect4:Disconnect()
+      connect4 = nil
+    end
+    zhiUI:Notify("透视已禁用", "透视已关闭", 1.5)
+  end
+end)
+
+ESPTab:AddButton("更新透视", function()
+  if espEnabled then
+    UpdateESP()
+  else
+    zhiUI:Notify("透视已禁用", "请先启用透视", 2)
+  end
+end)
+
+local walkspeed = 16
+local lockWalkspeed = false
+
+MiscTab:AddSlider("移动速度", 0, 100, 16, function(value)
+  walkspeed = value
+  if lockWalkspeed then
+    local c = players.LocalPlayer.Character
+    if c then
+      local h = c:FindFirstChild("Humanoid")
+      if h then h.WalkSpeed = walkspeed end
+    end
+  end
+end)
+
+local connect5
+
+MiscTab:AddToggle("锁定移动速度", false, function(state)
+  lockWalkspeed = state
+  local lp = players.LocalPlayer
+
+  if state then
+    local c = lp.Character
+    if c then
+      local h = c:FindFirstChild("Humanoid")
+      if h then h.WalkSpeed = walkspeed end
+    end
+
+    if connect5 then connect5:Disconnect() end
+    connect5 = runService.Heartbeat:Connect(function()
+      if lockWalkspeed then
+        local c2 = lp.Character
+        if c2 then
+          local h2 = c2:FindFirstChild("Humanoid")
+          if h2 and h2.WalkSpeed ~= walkspeed then
+            h2.WalkSpeed = walkspeed
+          end
+        end
+      end
+    end)
+
+    zhiUI:Notify("移动速度已锁定", "移动速度已设为 " .. walkspeed, 1.5)
+  else
+    if connect5 then
+      connect5:Disconnect()
+      connect5 = nil
+    end
+
+    local c3 = lp.Character
+    if c3 then
+      local h3 = c3:FindFirstChild("Humanoid")
+      if h3 then h3.WalkSpeed = 16 end
+    end
+
+    zhiUI:Notify("移动速度已解锁", "移动速度已重置为默认值", 1.5)
+  end
+end)
+
+local instantInteract = false
+local connect6
+
+MiscTab:AddToggle("瞬间交互", false, function(state)
+  instantInteract = state
+
+  if state then
+    if connect6 then connect6:Disconnect() end
+    connect6 = runService.Heartbeat:Connect(function()
+      if instantInteract then
+        for _, v in pairs(workspace:GetDescendants()) do
+          if v:IsA("ProximityPrompt") then
+            v.HoldDuration = 0
+          end
+        end
+      end
+    end)
+    zhiUI:Notify("瞬间交互", "已启用", 1.5)
+  else
+    if connect6 then
+      connect6:Disconnect()
+      connect6 = nil
+    end
+    for _, v in pairs(workspace:GetDescendants()) do
+      if v:IsA("ProximityPrompt") then
+        v.HoldDuration = 1
+      end
+    end
+    zhiUI:Notify("瞬间交互", "已禁用", 1.5)
+  end
+end)
+
+local flightPanelGui = nil
+local flightSpeeds = 1
+local flightNowe = false
+
+local function openFlightPanel()
+  local main = Instance.new("ScreenGui")
+  local Frame = Instance.new("Frame")
+  local up = Instance.new("TextButton")
+  local down = Instance.new("TextButton")
+  local onof = Instance.new("TextButton")
+  local TextLabel = Instance.new("TextLabel")
+  local plus = Instance.new("TextButton")
+  local speedLbl = Instance.new("TextLabel")
+  local mine = Instance.new("TextButton")
+  local closebutton = Instance.new("TextButton")
+  local mini = Instance.new("TextButton")
+  local mini2 = Instance.new("TextButton")
+
+  local GLASS_TRANSPARENCY = 0.78
+  local GRAD_BLUE  = Color3.fromRGB(18, 20, 85)
+  local GRAD_PURPLE = Color3.fromRGB(78, 20, 130)
+  local STROKE_COLOR = Color3.fromRGB(140, 100, 255)
+
+  local function makeGlass(gui, transparency)
+    gui.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    gui.BackgroundTransparency = transparency or GLASS_TRANSPARENCY
+    gui.BorderSizePixel = 0
+    gui.BorderColor3 = Color3.fromRGB(255, 255, 255)
+
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new({
+      ColorSequenceKeypoint.new(0, GRAD_BLUE),
+      ColorSequenceKeypoint.new(1, GRAD_PURPLE),
+    })
+    grad.Rotation = 45
+    grad.Parent = gui
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Name = "GlassStroke"
+    stroke.Color = STROKE_COLOR
+    stroke.Thickness = 1.5
+    stroke.Transparency = 0.65
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Parent = gui
+
+    if gui:IsA("TextButton") or gui:IsA("TextLabel") then
+      gui.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+  end
+
+  main.Name = "zhiFlightPanel"
+  main.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+  main.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+  main.ResetOnSpawn = false
+
+  Frame.Parent = main
+  Frame.Position = UDim2.new(0.100320168, 0, 0.379746825, 0)
+  Frame.Size = UDim2.new(0, 190, 0, 57)
+  makeGlass(Frame)
+
+  up.Name = "up"
+  up.Parent = Frame
+  up.Size = UDim2.new(0, 44, 0, 28)
+  up.Font = Enum.Font.SourceSans
+  up.Text = "升"
+  up.TextSize = 18.000
+  makeGlass(up)
+
+  down.Name = "down"
+  down.Parent = Frame
+  down.Position = UDim2.new(0, 0, 0.491228074, 0)
+  down.Size = UDim2.new(0, 44, 0, 28)
+  down.Font = Enum.Font.SourceSans
+  down.Text = "降"
+  down.TextSize = 18.000
+  makeGlass(down)
+
+  onof.Name = "onof"
+  onof.Parent = Frame
+  onof.Position = UDim2.new(0.702823281, 0, 0.491228074, 0)
+  onof.Size = UDim2.new(0, 56, 0, 28)
+  onof.Font = Enum.Font.SourceSans
+  onof.Text = "飞行"
+  onof.TextSize = 16.000
+  makeGlass(onof)
+
+  TextLabel.Parent = Frame
+  TextLabel.Position = UDim2.new(0.469327301, 0, 0, 0)
+  TextLabel.Size = UDim2.new(0, 100, 0, 28)
+  TextLabel.Font = Enum.Font.SourceSans
+  TextLabel.Text = "纸.飞行"
+  TextLabel.TextScaled = true
+  TextLabel.TextSize = 14.000
+  TextLabel.TextWrapped = true
+  makeGlass(TextLabel)
+
+  plus.Name = "plus"
+  plus.Parent = Frame
+  plus.Position = UDim2.new(0.231578946, 0, 0, 0)
+  plus.Size = UDim2.new(0, 45, 0, 28)
+  plus.Font = Enum.Font.SourceSans
+  plus.Text = "+"
+  plus.TextScaled = true
+  plus.TextSize = 14.000
+  plus.TextWrapped = true
+  makeGlass(plus)
+
+  speedLbl.Name = "speed"
+  speedLbl.Parent = Frame
+  speedLbl.Position = UDim2.new(0.468421042, 0, 0.491228074, 0)
+  speedLbl.Size = UDim2.new(0, 44, 0, 28)
+  speedLbl.Font = Enum.Font.SourceSans
+  speedLbl.Text = tostring(flightSpeeds)
+  speedLbl.TextScaled = true
+  speedLbl.TextSize = 14.000
+  speedLbl.TextWrapped = true
+  makeGlass(speedLbl)
+
+  mine.Name = "mine"
+  mine.Parent = Frame
+  mine.Position = UDim2.new(0.231578946, 0, 0.491228074, 0)
+  mine.Size = UDim2.new(0, 45, 0, 29)
+  mine.Font = Enum.Font.SourceSans
+  mine.Text = "-"
+  mine.TextScaled = true
+  mine.TextSize = 14.000
+  mine.TextWrapped = true
+  makeGlass(mine)
+
+  closebutton.Name = "Close"
+  closebutton.Parent = main.Frame
+  closebutton.Font = "SourceSans"
+  closebutton.Size = UDim2.new(0, 45, 0, 28)
+  closebutton.Text = "关闭"
+  closebutton.TextSize = 18
+  closebutton.Position = UDim2.new(0, 0, -1, 27)
+  makeGlass(closebutton)
+
+  mini.Name = "minimize"
+  mini.Parent = main.Frame
+  mini.Font = "SourceSans"
+  mini.Size = UDim2.new(0, 45, 0, 28)
+  mini.Text = "折叠"
+  mini.TextSize = 18
+  mini.Position = UDim2.new(0, 44, -1, 27)
+  makeGlass(mini)
+
+  mini2.Name = "minimize2"
+  mini2.Parent = main.Frame
+  mini2.Font = "SourceSans"
+  mini2.Size = UDim2.new(0, 45, 0, 28)
+  mini2.Text = "展开"
+  mini2.TextSize = 18
+  mini2.Position = UDim2.new(0, 44, -1, 57)
+  mini2.Visible = false
+  makeGlass(mini2)
+
+  local speaker = game:GetService("Players").LocalPlayer
+
+  Frame.Active = true
+  Frame.Draggable = true
+
+  onof.MouseButton1Down:Connect(function()
+    if flightNowe == true then
+      flightNowe = false
+
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Flying,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Running,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics,true)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming,true)
+      speaker.Character.Humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+    else
+      flightNowe = true
+
+      for i = 1, flightSpeeds do
+        spawn(function()
+          local hb = game:GetService("RunService").Heartbeat
+          tpwalking = true
+          local chr = game.Players.LocalPlayer.Character
+          local hum = chr and chr:FindFirstChildWhichIsA("Humanoid")
+          while tpwalking and hb:Wait() and chr and hum and hum.Parent do
+            if hum.MoveDirection.Magnitude > 0 then
+              chr:TranslateBy(hum.MoveDirection)
+            end
+          end
+        end)
+      end
+
+      game.Players.LocalPlayer.Character.Animate.Disabled = true
+      local Char = game.Players.LocalPlayer.Character
+      local Hum = Char:FindFirstChildOfClass("Humanoid") or Char:FindFirstChildOfClass("AnimationController")
+
+      for i,v in next, Hum:GetPlayingAnimationTracks() do
+        v:AdjustSpeed(0)
+      end
+
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Flying,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Running,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics,false)
+      speaker.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming,false)
+      speaker.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
+    end
+
+    if game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid").RigType == Enum.HumanoidRigType.R6 then
+      local plr = game.Players.LocalPlayer
+      local torso = plr.Character.Torso
+      local ctrl = {f = 0, b = 0, l = 0, r = 0}
+      local lastctrl = {f = 0, b = 0, l = 0, r = 0}
+      local maxspeed = 50
+      local speed = 0
+
+      local bg = Instance.new("BodyGyro", torso)
+      bg.P = 9e4
+      bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+      bg.cframe = torso.CFrame
+      local bv = Instance.new("BodyVelocity", torso)
+      bv.velocity = Vector3.new(0,0.1,0)
+      bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+      if flightNowe == true then
+        plr.Character.Humanoid.PlatformStand = true
+      end
+
+      local keys = {}
+      local function addKey(k)
+        local conn = userInputService.InputBegan:Connect(function(inp, gp)
+          if gp then return end
+          if inp.KeyCode == Enum.KeyCode.W then ctrl.f = 1
+          elseif inp.KeyCode == Enum.KeyCode.S then ctrl.b = -1
+          elseif inp.KeyCode == Enum.KeyCode.A then ctrl.l = -1
+          elseif inp.KeyCode == Enum.KeyCode.D then ctrl.r = 1
+          end
+        end)
+        local conn2 = userInputService.InputEnded:Connect(function(inp)
+          if inp.KeyCode == Enum.KeyCode.W then ctrl.f = 0
+          elseif inp.KeyCode == Enum.KeyCode.S then ctrl.b = 0
+          elseif inp.KeyCode == Enum.KeyCode.A then ctrl.l = 0
+          elseif inp.KeyCode == Enum.KeyCode.D then ctrl.r = 0
+          end
+        end)
+        table.insert(keys, conn)
+        table.insert(keys, conn2)
+      end
+      addKey()
+
+      while flightNowe == true and plr.Character and plr.Character.Humanoid.Health > 0 do
+        game:GetService("RunService").RenderStepped:Wait()
+
+        if ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0 then
+          speed = speed+.5+(speed/maxspeed)
+          if speed > maxspeed then speed = maxspeed end
+        elseif not (ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0) and speed ~= 0 then
+          speed = speed-1
+          if speed < 0 then speed = 0 end
+        end
+        if (ctrl.l + ctrl.r) ~= 0 or (ctrl.f + ctrl.b) ~= 0 then
+          bv.velocity = ((game.Workspace.CurrentCamera.CoordinateFrame.lookVector * (ctrl.f+ctrl.b)) + ((game.Workspace.CurrentCamera.CoordinateFrame * CFrame.new(ctrl.l+ctrl.r,(ctrl.f+ctrl.b)*.2,0).p) - game.Workspace.CurrentCamera.CoordinateFrame.p))*speed
+          lastctrl = {f = ctrl.f, b = ctrl.b, l = ctrl.l, r = ctrl.r}
+        elseif (ctrl.l + ctrl.r) == 0 and (ctrl.f + ctrl.b) == 0 and speed ~= 0 then
+          bv.velocity = ((game.Workspace.CurrentCamera.CoordinateFrame.lookVector * (lastctrl.f+lastctrl.b)) + ((game.Workspace.CurrentCamera.CoordinateFrame * CFrame.new(lastctrl.l+lastctrl.r,(lastctrl.f+lastctrl.b)*.2,0).p) - game.Workspace.CurrentCamera.CoordinateFrame.p))*speed
+        else
+          bv.velocity = Vector3.new(0,0,0)
+        end
+        bg.cframe = game.Workspace.CurrentCamera.CoordinateFrame * CFrame.Angles(-math.rad((ctrl.f+ctrl.b)*50*speed/maxspeed),0,0)
+      end
+
+      for _, c in pairs(keys) do c:Disconnect() end
+      ctrl = {f = 0, b = 0, l = 0, r = 0}
+      lastctrl = {f = 0, b = 0, l = 0, r = 0}
+      speed = 0
+      bg:Destroy()
+      bv:Destroy()
+      if plr.Character and plr.Character:FindFirstChildOfClass("Humanoid") then
+        plr.Character.Humanoid.PlatformStand = false
+      end
+      pcall(function() game.Players.LocalPlayer.Character.Animate.Disabled = false end)
+      tpwalking = false
+    else
+      local plr = game.Players.LocalPlayer
+      local UpperTorso = plr.Character.UpperTorso
+      local ctrl = {f = 0, b = 0, l = 0, r = 0}
+      local lastctrl = {f = 0, b = 0, l = 0, r = 0}
+      local maxspeed = 50
+      local speed = 0
+
+      local bg = Instance.new("BodyGyro", UpperTorso)
+      bg.P = 9e4
+      bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+      bg.cframe = UpperTorso.CFrame
+      local bv = Instance.new("BodyVelocity", UpperTorso)
+      bv.velocity = Vector3.new(0,0.1,0)
+      bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+      if flightNowe == true then
+        plr.Character.Humanoid.PlatformStand = true
+      end
+
+      local keys = {}
+      local conn = userInputService.InputBegan:Connect(function(inp, gp)
+        if gp then return end
+        if inp.KeyCode == Enum.KeyCode.W then ctrl.f = 1
+        elseif inp.KeyCode == Enum.KeyCode.S then ctrl.b = -1
+        elseif inp.KeyCode == Enum.KeyCode.A then ctrl.l = -1
+        elseif inp.KeyCode == Enum.KeyCode.D then ctrl.r = 1
+        end
+      end)
+      local conn2 = userInputService.InputEnded:Connect(function(inp)
+        if inp.KeyCode == Enum.KeyCode.W then ctrl.f = 0
+        elseif inp.KeyCode == Enum.KeyCode.S then ctrl.b = 0
+        elseif inp.KeyCode == Enum.KeyCode.A then ctrl.l = 0
+        elseif inp.KeyCode == Enum.KeyCode.D then ctrl.r = 0
+        end
+      end)
+      table.insert(keys, conn)
+      table.insert(keys, conn2)
+
+      while flightNowe == true and plr.Character and plr.Character.Humanoid.Health > 0 do
+        wait()
+
+        if ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0 then
+          speed = speed+.5+(speed/maxspeed)
+          if speed > maxspeed then speed = maxspeed end
+        elseif not (ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0) and speed ~= 0 then
+          speed = speed-1
+          if speed < 0 then speed = 0 end
+        end
+        if (ctrl.l + ctrl.r) ~= 0 or (ctrl.f + ctrl.b) ~= 0 then
+          bv.velocity = ((game.Workspace.CurrentCamera.CoordinateFrame.lookVector * (ctrl.f+ctrl.b)) + ((game.Workspace.CurrentCamera.CoordinateFrame * CFrame.new(ctrl.l+ctrl.r,(ctrl.f+ctrl.b)*.2,0).p) - game.Workspace.CurrentCamera.CoordinateFrame.p))*speed
+          lastctrl = {f = ctrl.f, b = ctrl.b, l = ctrl.l, r = ctrl.r}
+        elseif (ctrl.l + ctrl.r) == 0 and (ctrl.f + ctrl.b) == 0 and speed ~= 0 then
+          bv.velocity = ((game.Workspace.CurrentCamera.CoordinateFrame.lookVector * (lastctrl.f+lastctrl.b)) + ((game.Workspace.CurrentCamera.CoordinateFrame * CFrame.new(lastctrl.l+lastctrl.r,(lastctrl.f+lastctrl.b)*.2,0).p) - game.Workspace.CurrentCamera.CoordinateFrame.p))*speed
+        else
+          bv.velocity = Vector3.new(0,0,0)
+        end
+
+        bg.cframe = game.Workspace.CurrentCamera.CoordinateFrame * CFrame.Angles(-math.rad((ctrl.f+ctrl.b)*50*speed/maxspeed),0,0)
+      end
+
+      for _, c in pairs(keys) do c:Disconnect() end
+      ctrl = {f = 0, b = 0, l = 0, r = 0}
+      lastctrl = {f = 0, b = 0, l = 0, r = 0}
+      speed = 0
+      bg:Destroy()
+      bv:Destroy()
+      if plr.Character and plr.Character:FindFirstChildOfClass("Humanoid") then
+        plr.Character.Humanoid.PlatformStand = false
+      end
+      pcall(function() game.Players.LocalPlayer.Character.Animate.Disabled = false end)
+      tpwalking = false
+    end
+  end)
+
+  local tis
+  up.MouseButton1Down:Connect(function()
+    tis = up.MouseEnter:Connect(function()
+      while tis do
+        wait()
+        local c = game.Players.LocalPlayer.Character
+        if c and c:FindFirstChild("HumanoidRootPart") then
+          c.HumanoidRootPart.CFrame = c.HumanoidRootPart.CFrame * CFrame.new(0,1,0)
+        end
+      end
+    end)
+  end)
+
+  up.MouseLeave:Connect(function()
+    if tis then
+      tis:Disconnect()
+      tis = nil
+    end
+  end)
+
+  local dis
+  down.MouseButton1Down:Connect(function()
+    dis = down.MouseEnter:Connect(function()
+      while dis do
+        wait()
+        local c = game.Players.LocalPlayer.Character
+        if c and c:FindFirstChild("HumanoidRootPart") then
+          c.HumanoidRootPart.CFrame = c.HumanoidRootPart.CFrame * CFrame.new(0,-1,0)
+        end
+      end
+    end)
+  end)
+
+  down.MouseLeave:Connect(function()
+    if dis then
+      dis:Disconnect()
+      dis = nil
+    end
+  end)
+
+  game:GetService("Players").LocalPlayer.CharacterAdded:Connect(function(char)
+    wait(0.7)
+    if char:FindFirstChildOfClass("Humanoid") then
+      char.Humanoid.PlatformStand = false
+    end
+    if char:FindFirstChild("Animate") then
+      char.Animate.Disabled = false
+    end
+  end)
+
+  plus.MouseButton1Down:Connect(function()
+    flightSpeeds = flightSpeeds + 1
+    speedLbl.Text = tostring(flightSpeeds)
+    if flightNowe == true then
+      tpwalking = false
+      for i = 1, flightSpeeds do
+        spawn(function()
+          local hb = game:GetService("RunService").Heartbeat
+          tpwalking = true
+          local chr = game.Players.LocalPlayer.Character
+          local hum = chr and chr:FindFirstChildWhichIsA("Humanoid")
+          while tpwalking and hb:Wait() and chr and hum and hum.Parent do
+            if hum.MoveDirection.Magnitude > 0 then
+              chr:TranslateBy(hum.MoveDirection)
+            end
+          end
+        end)
+      end
+    end
+  end)
+
+  mine.MouseButton1Down:Connect(function()
+    if flightSpeeds == 1 then
+      speedLbl.Text = '不能小于1'
+      wait(1)
+      speedLbl.Text = tostring(flightSpeeds)
+    else
+      flightSpeeds = flightSpeeds - 1
+      speedLbl.Text = tostring(flightSpeeds)
+      if flightNowe == true then
+        tpwalking = false
+        for i = 1, flightSpeeds do
+          spawn(function()
+            local hb = game:GetService("RunService").Heartbeat
+            tpwalking = true
+            local chr = game.Players.LocalPlayer.Character
+            local hum = chr and chr:FindFirstChildWhichIsA("Humanoid")
+            while tpwalking and hb:Wait() and chr and hum and hum.Parent do
+              if hum.MoveDirection.Magnitude > 0 then
+                chr:TranslateBy(hum.MoveDirection)
+              end
+            end
+          end)
+        end
+      end
+    end
+  end)
+
+  closebutton.MouseButton1Click:Connect(function()
+    main:Destroy()
+    flightPanelGui = nil
+  end)
+
+  mini.MouseButton1Click:Connect(function()
+    up.Visible = false
+    down.Visible = false
+    onof.Visible = false
+    plus.Visible = false
+    speedLbl.Visible = false
+    mine.Visible = false
+    mini.Visible = false
+    mini2.Visible = true
+
+    main.Frame.BackgroundTransparency = 1
+    for _, v in pairs(main.Frame:GetDescendants()) do
+      if v:IsA("UIStroke") then
+        v.Transparency = 1
+      end
+    end
+
+    closebutton.Position =  UDim2.new(0, 0, -1, 57)
+  end)
+
+  mini2.MouseButton1Click:Connect(function()
+    up.Visible = true
+    down.Visible = true
+    onof.Visible = true
+    plus.Visible = true
+    speedLbl.Visible = true
+    mine.Visible = true
+    mini.Visible = true
+    mini2.Visible = false
+
+    main.Frame.BackgroundTransparency = GLASS_TRANSPARENCY
+    for _, v in pairs(main.Frame:GetDescendants()) do
+      if v:IsA("UIStroke") then
+        v.Transparency = 0.65
+      end
+    end
+
+    closebutton.Position =  UDim2.new(0, 0, -1, 27)
+  end)
+
+  return main
+end
+
+MiscTab:AddButton("飞行", function()
+  if flightPanelGui and flightPanelGui.Parent then
+    flightPanelGui:Destroy()
+    flightPanelGui = nil
+    zhiUI:Notify("飞行", "已关闭", 1.5)
+  else
+    flightPanelGui = openFlightPanel()
+    zhiUI:Notify("飞行", "已打开", 1.5)
+  end
+end)
