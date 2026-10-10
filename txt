@@ -1,0 +1,82 @@
+local TARGET_DIRS = {
+    "/storage/emulated/0/Delta/Workspace",
+    "/sdcard/Delta/Workspace",
+    "Workspace",
+}
+
+local DEFAULT_COUNT = 1
+local MAX_COUNT = 100
+
+local CHAR_POOL = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+local NAME_LEN = 4
+
+local EXT = ".txt"
+
+local CONTENT = [[print ("你好ヽ(^0^)ノ")]]
+
+local writeFn = writefile or write_file or (syn and syn.write_file)
+
+if not writeFn then
+    return warn("[错误] 当前执行器不支持 writefile，无法生成文件。")
+end
+
+-- 随机 4 位文件名 + .txt，例如 gu6w.txt
+local function randomFileName()
+    local t = {}
+    for i = 1, NAME_LEN do
+        local idx = math.random(1, #CHAR_POOL)
+        t[i] = CHAR_POOL:sub(idx, idx)
+    end
+    return table.concat(t) .. EXT
+end
+
+local function writeSmart(fileName, content)
+    local lastErr
+    for _, dir in ipairs(TARGET_DIRS) do
+        local path = dir .. "/" .. fileName
+        local ok, err = pcall(writeFn, path, content)
+        if ok then
+            return true, path
+        end
+        lastErr = err
+    end
+    return false, lastErr
+end
+
+local count = DEFAULT_COUNT
+local inputFn = readinput or (syn and syn.readinput) or (getgenv and getgenv().readinput)
+
+if inputFn then
+    local ok, res = pcall(inputFn, "请输入要生成的文件数量（1-" .. MAX_COUNT .. "）：")
+    if ok and res then
+        local num = tonumber(res)
+        if num and num >= 1 then
+            count = math.floor(num)
+        end
+    end
+end
+
+if count < 1 then count = 1 end
+if count > MAX_COUNT then
+    count = MAX_COUNT
+    warn("[提示] 数量太多，已自动限制为 " .. MAX_COUNT)
+end
+
+local used = {}
+for i = 1, count do
+    local fileName
+    local tries = 0
+    repeat
+        fileName = randomFileName()
+        tries = tries + 1
+    until not used[fileName] or tries > 100
+    used[fileName] = true
+
+    local ok, result = writeSmart(fileName, CONTENT)
+
+    if ok then
+        print(("[%d/%d] 已生成: %s"):format(i, count, result))
+    else
+        warn(("[%d/%d] 失败: %s -> %s"):format(i, count, fileName, tostring(result)))
+    end
+end
