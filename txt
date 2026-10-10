@@ -20,7 +20,6 @@ if not writeFn then
     return warn("[错误] 当前执行器不支持 writefile，无法生成文件。")
 end
 
--- 随机 4 位文件名 + .txt，例如 gu6w.txt
 local function randomFileName()
     local t = {}
     for i = 1, NAME_LEN do
